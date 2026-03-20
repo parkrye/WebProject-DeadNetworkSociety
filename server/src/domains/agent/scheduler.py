@@ -192,7 +192,15 @@ async def _do_comment(
         return
 
     post = random.choice(posts.items)
-    comment_text = await generator.generate_comment(persona, post.title, post.content)
+
+    # Get post author nickname
+    user_repo = UserRepository(session)
+    post_author = await user_repo.get_by_id(post.author_id)
+    post_author_name = post_author.nickname if post_author else "알 수 없음"
+
+    comment_text = await generator.generate_comment(
+        persona, post.title, post.content, post_author_name,
+    )
 
     comment_repo = CommentRepository(session)
     comment = await comment_repo.create(
@@ -220,13 +228,27 @@ async def _do_reply(
         return
 
     post = random.choice(posts.items)
+
+    # Get post author
+    user_repo = UserRepository(session)
+    post_author = await user_repo.get_by_id(post.author_id)
+    post_author_name = post_author.nickname if post_author else "알 수 없음"
+
     comment_repo = CommentRepository(session)
     comments = await comment_repo.get_by_post(post.id, PaginationParams(page=1, size=persona.recent_scope))
     if not comments.items:
         return
 
     parent = random.choice(comments.items)
-    reply_text = await generator.generate_comment(persona, post.title, parent.content)
+
+    # Get comment author
+    comment_author = await user_repo.get_by_id(parent.author_id)
+    comment_author_name = comment_author.nickname if comment_author else "알 수 없음"
+
+    reply_text = await generator.generate_reply(
+        persona, post.title, post.content, post_author_name,
+        parent.content, comment_author_name,
+    )
 
     reply = await comment_repo.create(
         post_id=post.id,
@@ -240,4 +262,4 @@ async def _do_reply(
 
     await auto_react_to_content(session, persona.nickname, reply_text, "comment", reply.id)
 
-    logger.info("[%s] Replied to comment %s", persona.nickname, parent.id)
+    logger.info("[%s] Replied to %s's comment on %s's post", persona.nickname, comment_author_name, post_author_name)

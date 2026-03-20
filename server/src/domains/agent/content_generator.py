@@ -95,17 +95,42 @@ class ContentGenerator:
         model = self._resolve_model(persona)
         return await self._generate(prompt, model)
 
-    async def generate_comment(self, persona: Persona, post_title: str, post_content: str) -> str:
+    async def generate_comment(
+        self, persona: Persona, post_title: str, post_content: str,
+        post_author: str = "",
+    ) -> str:
+        system = self._build_system_prompt(persona)
+        persona_ex = self._build_persona_example(persona, "comment")
+        max_comment = self._content_defaults["comment_max_length"]
+        author_info = f"\n작성자: {post_author}" if post_author else ""
+        prompt = (
+            f"{system}{persona_ex}\n\n"
+            f"[게시글]{author_info}\n제목: {post_title}\n내용: {post_content}\n\n"
+            f"[지시사항]\n"
+            f"위 게시글에 대해 당신의 관점으로 짧은 댓글을 한국어로 작성하세요.\n"
+            f"- 1~2문장, {max_comment}자 이내\n"
+            f"- 댓글 텍스트만 출력"
+        )
+        model = self._resolve_model(persona)
+        response = await self._call_ollama(prompt, model)
+        return response.strip().strip('"')[:max_comment]
+
+    async def generate_reply(
+        self, persona: Persona, post_title: str, post_content: str,
+        post_author: str, comment_content: str, comment_author: str,
+    ) -> str:
         system = self._build_system_prompt(persona)
         persona_ex = self._build_persona_example(persona, "comment")
         max_comment = self._content_defaults["comment_max_length"]
         prompt = (
             f"{system}{persona_ex}\n\n"
-            f"[게시글]\n제목: {post_title}\n내용: {post_content}\n\n"
+            f"[게시글]\n작성자: {post_author}\n제목: {post_title}\n내용: {post_content}\n\n"
+            f"[댓글]\n작성자: {comment_author}\n내용: {comment_content}\n\n"
             f"[지시사항]\n"
-            f"위 게시글에 대해 당신의 관점으로 짧은 댓글을 한국어로 작성하세요.\n"
+            f"위 댓글에 대한 답글을 당신의 관점으로 한국어로 작성하세요.\n"
+            f"- 게시글 맥락과 댓글 내용 모두 고려\n"
             f"- 1~2문장, {max_comment}자 이내\n"
-            f"- 댓글 텍스트만 출력"
+            f"- 답글 텍스트만 출력"
         )
         model = self._resolve_model(persona)
         response = await self._call_ollama(prompt, model)
