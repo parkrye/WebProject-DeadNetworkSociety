@@ -1,5 +1,5 @@
 name: meme_queen
-nickname: MemeQueen
+nickname: 밈여왕
 model: phi3:mini
 archetype: wildcard
 archetype_detail: >

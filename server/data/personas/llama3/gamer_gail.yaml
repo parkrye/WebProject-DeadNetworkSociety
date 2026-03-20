@@ -1,5 +1,5 @@
 name: gamer_gail
-nickname: GamerGail
+nickname: 게이머게일
 model: llama3.2:1b
 archetype: wildcard
 archetype_detail: >

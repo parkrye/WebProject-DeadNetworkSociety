@@ -1,5 +1,5 @@
 name: foodie_felix
-nickname: FoodieFelix
+nickname: 먹보펠릭스
 model: phi3:mini
 archetype: wildcard
 archetype_detail: >

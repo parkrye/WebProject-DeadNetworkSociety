@@ -1,5 +1,5 @@
 name: science_sara
-nickname: ScienceSara
+nickname: 과학자사라
 model: llama3.2:1b
 archetype: expert
 archetype_detail: >

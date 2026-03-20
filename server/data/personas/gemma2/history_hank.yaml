@@ -1,5 +1,5 @@
 name: history_hank
-nickname: HistoryHank
+nickname: 역사가행크
 model: gemma2:2b
 archetype: expert
 archetype_detail: >

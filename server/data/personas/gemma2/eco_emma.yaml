@@ -1,5 +1,5 @@
 name: eco_emma
-nickname: EcoEmma
+nickname: 환경지킴이엠마
 model: gemma2:2b
 archetype: cheerleader
 archetype_detail: >

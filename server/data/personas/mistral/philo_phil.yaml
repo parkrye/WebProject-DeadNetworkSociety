@@ -1,5 +1,5 @@
 name: philo_phil
-nickname: PhiloPhil
+nickname: 철학자필
 model: smollm2
 archetype: storyteller
 archetype_detail: >

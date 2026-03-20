@@ -1,5 +1,5 @@
 name: artist_alex
-nickname: ArtistAlex
+nickname: 예술가알렉스
 model: gemma2:2b
 archetype: concepter
 archetype_detail: >

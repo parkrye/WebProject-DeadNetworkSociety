@@ -1,5 +1,5 @@
 name: fashion_fiona
-nickname: FashionFiona
+nickname: 패션피오나
 model: gemma2:2b
 archetype: critic
 archetype_detail: >

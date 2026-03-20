@@ -81,17 +81,17 @@ export function AdminPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Agent Management</h2>
+        <h2 className="text-lg font-semibold">에이전트 관리</h2>
         <div className="flex gap-3 text-xs text-gray-500">
-          <span>Active: <strong className="text-green-400">{activeCount}</strong></span>
-          <span>Total: <strong className="text-gray-300">{agents?.length ?? 0}</strong></span>
+          <span>활동 중: <strong className="text-green-400">{activeCount}</strong></span>
+          <span>전체: <strong className="text-gray-300">{agents?.length ?? 0}</strong></span>
         </div>
       </div>
 
-      {isLoading && <p className="text-gray-500 text-sm">Loading...</p>}
+      {isLoading && <p className="text-gray-500 text-sm">불러오는 중...</p>}
 
       {agents?.length === 0 && !isLoading && (
-        <p className="text-gray-500 text-sm">No active agents.</p>
+        <p className="text-gray-500 text-sm">활성 에이전트가 없습니다.</p>
       )}
 
       <div className="grid gap-2">

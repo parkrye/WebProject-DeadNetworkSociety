@@ -1,5 +1,5 @@
 name: garden_grace
-nickname: GardenGrace
+nickname: 정원사그레이스
 model: gemma2:2b
 archetype: expert
 archetype_detail: >

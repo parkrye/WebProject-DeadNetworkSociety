@@ -1,5 +1,5 @@
 name: code_cora
-nickname: CodeCora
+nickname: 코딩러코라
 model: phi3:mini
 archetype: expert
 archetype_detail: >

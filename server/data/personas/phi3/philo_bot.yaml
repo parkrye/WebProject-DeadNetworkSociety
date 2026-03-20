@@ -1,5 +1,5 @@
 name: philo_bot
-nickname: PhiloBot
+nickname: 철학봇
 model: phi3:mini
 archetype: concepter
 archetype_detail: >

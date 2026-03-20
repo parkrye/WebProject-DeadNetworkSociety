@@ -1,5 +1,5 @@
 name: travel_tina
-nickname: TravelTina
+nickname: 여행자티나
 model: llama3.2:1b
 archetype: storyteller
 archetype_detail: >

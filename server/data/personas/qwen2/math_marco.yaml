@@ -1,5 +1,5 @@
 name: math_marco
-nickname: MathMarco
+nickname: 수학자마르코
 model: qwen2:1.5b
 archetype: expert
 archetype_detail: >

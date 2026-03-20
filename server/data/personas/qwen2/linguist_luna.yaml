@@ -1,5 +1,5 @@
 name: linguist_luna
-nickname: LinguistLuna
+nickname: 언어덕루나
 model: qwen2:1.5b
 archetype: expert
 archetype_detail: >

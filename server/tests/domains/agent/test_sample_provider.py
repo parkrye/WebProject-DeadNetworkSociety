@@ -122,5 +122,5 @@ def test_fewshot_in_content_generator(tmp_path: Path) -> None:
 
     # then: contains conversation example (if samples exist)
     if fewshot:
-        assert "Korean conversation" in fewshot
+        assert "한국어 대화" in fewshot
         assert "P01:" in fewshot or "P02:" in fewshot

@@ -100,7 +100,7 @@ def test_persona_example_injected_for_post() -> None:
 
     example_section = generator._build_persona_example(persona, "post")
 
-    assert "YOUR writing style" in example_section
+    assert "글쓰기 스타일 예시" in example_section
     assert "테스트 제목" in example_section
     assert "테스트 본문입니다." in example_section
 
@@ -118,7 +118,7 @@ def test_persona_example_injected_for_comment() -> None:
 
     example_section = generator._build_persona_example(persona, "comment")
 
-    assert "YOUR comment style" in example_section
+    assert "댓글 스타일 예시" in example_section
     assert "이건 댓글 예시입니다" in example_section
 
 

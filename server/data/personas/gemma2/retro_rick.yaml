@@ -1,5 +1,5 @@
 name: retro_rick
-nickname: RetroRick
+nickname: 레트로릭
 model: gemma2:2b
 archetype: observer
 archetype_detail: >

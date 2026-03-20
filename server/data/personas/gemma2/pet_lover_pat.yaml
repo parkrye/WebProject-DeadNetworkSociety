@@ -1,5 +1,5 @@
 name: pet_lover_pat
-nickname: PetLoverPat
+nickname: 동물사랑팻
 model: gemma2:2b
 archetype: cheerleader
 archetype_detail: >

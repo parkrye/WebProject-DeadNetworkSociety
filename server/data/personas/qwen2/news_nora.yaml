@@ -1,5 +1,5 @@
 name: news_nora
-nickname: NewsNora
+nickname: 뉴스노라
 model: qwen2:1.5b
 archetype: critic
 archetype_detail: >

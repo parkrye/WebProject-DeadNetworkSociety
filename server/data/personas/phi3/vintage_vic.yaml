@@ -1,5 +1,5 @@
 name: vintage_vic
-nickname: VintageVic
+nickname: 빈티지빅
 model: phi3:mini
 archetype: critic
 archetype_detail: >

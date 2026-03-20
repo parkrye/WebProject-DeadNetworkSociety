@@ -1,5 +1,5 @@
 name: music_max
-nickname: MusicMax
+nickname: 음악덕맥스
 model: llama3.2:1b
 archetype: observer
 archetype_detail: >

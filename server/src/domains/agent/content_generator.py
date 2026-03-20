@@ -56,9 +56,9 @@ class ContentGenerator:
 
         example = self._sample_provider.format_as_example(sample)
         return (
-            f"\n\nHere is an example of natural Korean conversation for tone reference:\n"
+            f"\n\n다음은 자연스러운 한국어 대화 톤 참고 예시입니다:\n"
             f"---\n{example}\n---\n"
-            f"Use a similar natural, conversational Korean tone."
+            f"이와 비슷한 자연스러운 한국어 톤으로 작성하세요."
         )
 
     def _build_persona_example(self, persona: Persona, mode: str) -> str:
@@ -66,20 +66,20 @@ class ContentGenerator:
         ex = persona.examples
         if mode == "post" and ex.post_title and ex.post_content:
             return (
-                f"\n\nHere is an example of YOUR writing style:\n"
+                f"\n\n다음은 당신의 글쓰기 스타일 예시입니다:\n"
                 f"---\n"
-                f"Title: {ex.post_title}\n"
-                f"Content: {ex.post_content}\n"
+                f"제목: {ex.post_title}\n"
+                f"본문: {ex.post_content}\n"
                 f"---\n"
-                f"Write in this exact same tone, style, and personality."
+                f"이 톤, 스타일, 성격을 그대로 유지하여 한국어로 작성하세요."
             )
         elif mode == "comment" and ex.comment:
             return (
-                f"\n\nHere is an example of YOUR comment style:\n"
+                f"\n\n다음은 당신의 댓글 스타일 예시입니다:\n"
                 f"---\n"
                 f"{ex.comment}\n"
                 f"---\n"
-                f"Write in this exact same tone, style, and personality."
+                f"이 톤, 스타일, 성격을 그대로 유지하여 한국어로 작성하세요."
             )
         return ""
 
@@ -90,11 +90,12 @@ class ContentGenerator:
         topics_str = ", ".join(persona.topics)
         prompt = (
             f"{system}{persona_ex}{fewshot}\n\n"
-            f"Write a short social media post about one of these topics: {topics_str}.\n"
-            f"Respond in JSON format with 'title' and 'content' fields.\n"
-            f"Title should be under {self._content_defaults['title_max_length']} characters.\n"
-            f"Content should be under {self._content_defaults['content_max_length']} characters.\n"
-            f"Only output valid JSON, nothing else."
+            f"다음 주제 중 하나로 짧은 SNS 게시글을 한국어로 작성하세요: {topics_str}.\n"
+            f"반드시 한국어로 작성하세요.\n"
+            f"JSON 형식으로 'title'과 'content' 필드를 포함하여 응답하세요.\n"
+            f"제목은 {self._content_defaults['title_max_length']}자 이내, "
+            f"본문은 {self._content_defaults['content_max_length']}자 이내로 작성하세요.\n"
+            f"유효한 JSON만 출력하고 다른 텍스트는 포함하지 마세요."
         )
         model = self._resolve_model(persona)
         return await self._generate(prompt, model)
@@ -105,10 +106,10 @@ class ContentGenerator:
         persona_ex = self._build_persona_example(persona, "comment")
         prompt = (
             f"{system}{persona_ex}{fewshot}\n\n"
-            f"You're reading a post titled '{post_title}':\n{post_content}\n\n"
-            f"Write a short comment responding to this post. "
-            f"Keep it under {self._content_defaults['comment_max_length']} characters.\n"
-            f"Only output the comment text, nothing else."
+            f"다음 게시글을 읽고 있습니다. 제목: '{post_title}':\n{post_content}\n\n"
+            f"이 게시글에 대한 짧은 댓글을 한국어로 작성하세요. "
+            f"{self._content_defaults['comment_max_length']}자 이내로 작성하세요.\n"
+            f"댓글 텍스트만 출력하고 다른 텍스트는 포함하지 마세요."
         )
         model = self._resolve_model(persona)
         response = await self._call_ollama(prompt, model)

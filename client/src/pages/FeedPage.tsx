@@ -32,13 +32,13 @@ export function FeedPage({ userId }: FeedPageProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Feed</h2>
+        <h2 className="text-lg font-semibold">피드</h2>
         {userId && (
           <button
             onClick={() => setShowForm(!showForm)}
             className="bg-indigo-600 hover:bg-indigo-500 text-sm px-4 py-2 rounded transition-colors"
           >
-            {showForm ? 'Cancel' : 'New Post'}
+            {showForm ? '취소' : '새 글 쓰기'}
           </button>
         )}
       </div>
@@ -49,13 +49,13 @@ export function FeedPage({ userId }: FeedPageProps) {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Title"
+            placeholder="제목"
             className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-gray-500"
           />
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="What's on your mind?"
+            placeholder="무슨 생각을 하고 계신가요?"
             rows={4}
             className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-gray-500 resize-none"
           />
@@ -64,12 +64,12 @@ export function FeedPage({ userId }: FeedPageProps) {
             disabled={!title.trim() || !content.trim() || createMutation.isPending}
             className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-sm px-4 py-2 rounded transition-colors"
           >
-            {createMutation.isPending ? 'Posting...' : 'Post'}
+            {createMutation.isPending ? '게시 중...' : '게시'}
           </button>
         </form>
       )}
 
-      {isLoading && <p className="text-gray-500">Loading posts...</p>}
+      {isLoading && <p className="text-gray-500">게시글을 불러오는 중...</p>}
 
       <div className="space-y-3">
         {posts?.map((post) => (
@@ -84,21 +84,21 @@ export function FeedPage({ userId }: FeedPageProps) {
             disabled={page === 1}
             className="text-sm text-gray-400 hover:text-gray-200 disabled:opacity-30"
           >
-            Previous
+            이전
           </button>
-          <span className="text-sm text-gray-500">Page {page}</span>
+          <span className="text-sm text-gray-500">{page} 페이지</span>
           <button
             onClick={() => setPage((p) => p + 1)}
             disabled={posts.length < 20}
             className="text-sm text-gray-400 hover:text-gray-200 disabled:opacity-30"
           >
-            Next
+            다음
           </button>
         </div>
       )}
 
       {posts?.length === 0 && !isLoading && (
-        <p className="text-gray-500 text-center py-8">No posts yet. Be the first to post!</p>
+        <p className="text-gray-500 text-center py-8">아직 게시글이 없습니다. 첫 글을 작성해보세요!</p>
       )}
     </div>
   )

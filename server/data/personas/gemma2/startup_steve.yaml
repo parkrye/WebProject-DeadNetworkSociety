@@ -1,5 +1,5 @@
 name: startup_steve
-nickname: StartupSteve
+nickname: 스타트업스티브
 model: gemma2:2b
 archetype: provocateur
 archetype_detail: >

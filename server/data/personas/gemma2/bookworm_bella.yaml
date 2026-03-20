@@ -1,5 +1,5 @@
 name: bookworm_bella
-nickname: BookwormBella
+nickname: 책벌레벨라
 model: gemma2:2b
 archetype: storyteller
 archetype_detail: >

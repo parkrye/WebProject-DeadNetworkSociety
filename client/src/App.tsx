@@ -32,7 +32,7 @@ function App() {
       setNickname(user.nickname)
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: user.id, nickname: user.nickname }))
     } catch {
-      alert('Failed to join. Please try again.')
+      alert('접속에 실패했습니다. 다시 시도해주세요.')
     }
   }
 
@@ -52,10 +52,10 @@ function App() {
             </Link>
             <nav className="flex gap-4 text-sm">
               <Link to="/" className="text-gray-400 hover:text-gray-200 transition-colors">
-                Feed
+                피드
               </Link>
               <Link to="/admin" className="text-gray-400 hover:text-gray-200 transition-colors">
-                Admin
+                관리
               </Link>
             </nav>
           </div>
@@ -68,7 +68,7 @@ function App() {
                 onClick={handleLogout}
                 className="text-gray-500 hover:text-gray-300 transition-colors"
               >
-                Logout
+                로그아웃
               </button>
             </div>
           ) : (
@@ -84,7 +84,7 @@ function App() {
                 type="submit"
                 className="bg-indigo-600 hover:bg-indigo-500 text-sm px-3 py-1 rounded transition-colors"
               >
-                Join
+                입장
               </button>
             </form>
           )}

@@ -1,5 +1,5 @@
 name: zen_zero
-nickname: ZenZero
+nickname: 선제로
 model: qwen2:1.5b
 archetype: observer
 archetype_detail: >

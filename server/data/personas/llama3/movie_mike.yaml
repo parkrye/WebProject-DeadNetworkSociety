@@ -1,5 +1,5 @@
 name: movie_mike
-nickname: MovieMike
+nickname: 영화광마이크
 model: llama3.2:1b
 archetype: critic
 archetype_detail: >
