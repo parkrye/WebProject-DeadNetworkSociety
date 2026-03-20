@@ -69,8 +69,8 @@ def test_archetype_prompt_injected_in_system_prompt() -> None:
 
     assert "test personality" in system_prompt
     assert "test style" in system_prompt
-    assert "Behavioral archetype:" in system_prompt
-    assert "Archetype specification:" in system_prompt
+    assert "행동 원형:" in system_prompt
+    assert "구체적 역할:" in system_prompt
     assert "요리 전문가" in system_prompt
 
 
@@ -83,7 +83,7 @@ def test_no_archetype_no_injection() -> None:
 
     system_prompt = generator._build_system_prompt(persona)
 
-    assert "Behavioral archetype:" not in system_prompt
+    assert "행동 원형:" not in system_prompt
 
 
 def test_persona_example_injected_for_post() -> None:

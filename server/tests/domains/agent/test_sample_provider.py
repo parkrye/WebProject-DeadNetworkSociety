@@ -104,7 +104,7 @@ def test_production_samples_loadable() -> None:
         assert len(sample["utterances"]) > 0
 
 
-def test_fewshot_in_content_generator(tmp_path: Path) -> None:
+def test_rag_context_in_content_generator(tmp_path: Path) -> None:
     # given: a generator with samples
     from src.domains.agent.content_generator import ContentGenerator
     from src.domains.agent.persona_loader import Persona
@@ -117,10 +117,28 @@ def test_fewshot_in_content_generator(tmp_path: Path) -> None:
         model="llama3", archetype="expert",
     )
 
-    # when: building fewshot section
-    fewshot = generator._build_fewshot_section(persona)
+    # when: building RAG context
+    rag = generator._build_rag_context(persona)
 
-    # then: contains conversation example (if samples exist)
-    if fewshot:
-        assert "한국어 대화" in fewshot
-        assert "P01:" in fewshot or "P02:" in fewshot
+    # then: contains retrieved content (if samples exist)
+    if rag:
+        assert "참고할 실제 한국어" in rag
+        assert "재해석" in rag
+
+
+def test_retrieve_multiple_samples(tmp_path: Path) -> None:
+    samples = {
+        "gaming": [
+            {"single_topic": "게임1", "utterances": [{"speaker": "P01", "text": "롤 하자"}]},
+            {"single_topic": "게임2", "utterances": [{"speaker": "P01", "text": "발로란트 할래?"}]},
+            {"single_topic": "게임3", "utterances": [{"speaker": "P01", "text": "메이플 접었어"}]},
+        ],
+    }
+    path = tmp_path / "test.json"
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(samples, f, ensure_ascii=False)
+
+    provider = SampleProvider(samples_path=path)
+    results = provider.retrieve(["gaming"], count=3)
+
+    assert len(results) == 3
