@@ -1,11 +1,20 @@
 import asyncio
+import sys
 from logging.config import fileConfig
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from src.shared.base_model import Base  # noqa: F401
+import src.domains.user.models  # noqa: F401
+import src.domains.post.models  # noqa: F401
+import src.domains.comment.models  # noqa: F401
+import src.domains.reaction.models  # noqa: F401
+import src.domains.agent.models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:
