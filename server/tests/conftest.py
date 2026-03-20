@@ -9,6 +9,7 @@ import src.domains.user.models  # noqa: F401
 import src.domains.post.models  # noqa: F401
 import src.domains.comment.models  # noqa: F401
 import src.domains.reaction.models  # noqa: F401
+import src.domains.agent.models  # noqa: F401
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 

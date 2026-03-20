@@ -11,6 +11,7 @@ from src.domains.user.router import router as user_router
 from src.domains.post.router import router as post_router
 from src.domains.comment.router import router as comment_router
 from src.domains.reaction.router import router as reaction_router
+from src.domains.agent.router import router as agent_router
 
 
 @asynccontextmanager
@@ -38,6 +39,7 @@ def create_app() -> FastAPI:
     app.include_router(post_router)
     app.include_router(comment_router)
     app.include_router(reaction_router)
+    app.include_router(agent_router)
 
     @app.get("/health")
     async def health_check() -> dict[str, str]:
