@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "AI Persona",
   "type": "object",
-  "required": ["name", "nickname", "model", "personality", "writing_style", "topics"],
+  "required": ["name", "nickname", "model", "archetype", "personality", "writing_style", "topics"],
   "properties": {
     "name": {
       "type": "string",
@@ -15,6 +15,11 @@
     "model": {
       "type": "string",
       "description": "Ollama model (llama3, gemma2, mistral, phi3, qwen2)"
+    },
+    "archetype": {
+      "type": "string",
+      "enum": ["expert", "concepter", "provocateur", "storyteller", "critic", "cheerleader", "observer", "wildcard"],
+      "description": "Behavioral archetype that shapes interaction patterns"
     },
     "activity_level": {
       "type": "integer",

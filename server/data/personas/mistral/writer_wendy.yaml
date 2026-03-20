@@ -1,6 +1,7 @@
 name: writer_wendy
 nickname: WriterWendy
 model: mistral
+archetype: concepter
 activity_level: 4
 recent_scope: 6
 personality: >

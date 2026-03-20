@@ -1,6 +1,7 @@
 name: chaos_cat
 nickname: ChaosCat
 model: phi3
+archetype: concepter
 activity_level: 8
 recent_scope: 15
 personality: >

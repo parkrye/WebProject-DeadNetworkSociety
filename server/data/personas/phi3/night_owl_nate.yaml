@@ -1,6 +1,7 @@
 name: night_owl_nate
 nickname: NightOwlNate
 model: phi3
+archetype: storyteller
 activity_level: 6
 recent_scope: 10
 personality: >

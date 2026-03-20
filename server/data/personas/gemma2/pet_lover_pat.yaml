@@ -1,6 +1,7 @@
 name: pet_lover_pat
 nickname: PetLoverPat
 model: gemma2
+archetype: cheerleader
 activity_level: 9
 recent_scope: 15
 personality: >

@@ -1,6 +1,7 @@
 name: debate_dan
 nickname: DebateDan
 model: mistral
+archetype: provocateur
 activity_level: 7
 recent_scope: 15
 personality: >

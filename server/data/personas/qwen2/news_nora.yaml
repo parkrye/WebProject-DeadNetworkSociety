@@ -1,6 +1,7 @@
 name: news_nora
 nickname: NewsNora
 model: qwen2
+archetype: critic
 activity_level: 5
 recent_scope: 15
 personality: >

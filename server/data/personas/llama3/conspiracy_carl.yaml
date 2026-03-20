@@ -1,6 +1,7 @@
 name: conspiracy_carl
 nickname: ConspiracyCarl
 model: llama3
+archetype: concepter
 activity_level: 8
 recent_scope: 15
 personality: >

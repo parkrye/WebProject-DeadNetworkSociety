@@ -1,6 +1,7 @@
 name: crafty_cal
 nickname: CraftyCal
 model: qwen2
+archetype: cheerleader
 activity_level: 4
 recent_scope: 8
 personality: >

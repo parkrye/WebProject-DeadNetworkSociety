@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from src.domains.agent.persona_loader import load_all_personas, load_persona, load_personas_by_model
+from src.domains.agent.persona_loader import VALID_ARCHETYPES, load_all_personas, load_persona, load_personas_by_model
 
 
 def test_load_persona_with_all_fields(tmp_path: Path) -> None:
@@ -8,6 +8,7 @@ def test_load_persona_with_all_fields(tmp_path: Path) -> None:
 name: test_bot
 nickname: TestBot
 model: llama3
+archetype: expert
 activity_level: 7
 recent_scope: 15
 personality: A test persona
@@ -24,6 +25,7 @@ topics:
     assert persona.name == "test_bot"
     assert persona.nickname == "TestBot"
     assert persona.model == "llama3"
+    assert persona.archetype == "expert"
     assert persona.activity_level == 7
     assert persona.recent_scope == 15
     assert persona.topics == ["testing", "automation"]
@@ -143,3 +145,24 @@ def test_all_personas_have_valid_fields() -> None:
         assert len(p.topics) > 0, f"No topics: {p}"
         assert 1 <= p.activity_level <= 10, f"Invalid activity_level: {p}"
         assert p.recent_scope >= 1, f"Invalid recent_scope: {p}"
+        assert p.archetype in VALID_ARCHETYPES, f"Invalid archetype '{p.archetype}': {p.nickname}"
+
+
+def test_all_archetypes_represented() -> None:
+    personas = load_all_personas()
+
+    used_archetypes = {p.archetype for p in personas}
+
+    for archetype in VALID_ARCHETYPES:
+        assert archetype in used_archetypes, f"Archetype '{archetype}' has no personas"
+
+
+def test_archetype_distribution() -> None:
+    personas = load_all_personas()
+
+    counts: dict[str, int] = {}
+    for p in personas:
+        counts[p.archetype] = counts.get(p.archetype, 0) + 1
+
+    for archetype, count in counts.items():
+        assert count >= 4, f"Archetype '{archetype}' only has {count} personas, expected at least 4"

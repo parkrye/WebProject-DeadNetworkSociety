@@ -21,32 +21,46 @@ class ContentGenerator:
     def __init__(self, base_url: str, default_model: str) -> None:
         self._base_url = base_url.rstrip("/")
         self._default_model = default_model
-        self._defaults = _load_ai_defaults()["content_generation"]
+        defaults = _load_ai_defaults()
+        self._content_defaults = defaults["content_generation"]
+        self._archetype_prompts = defaults.get("archetypes", {})
 
     def _resolve_model(self, persona: Persona) -> str:
         return persona.model or self._default_model
 
+    def _build_system_prompt(self, persona: Persona) -> str:
+        parts = [f"You are {persona.nickname}. {persona.personality}"]
+        parts.append(f"Writing style: {persona.writing_style}")
+
+        if persona.archetype and persona.archetype in self._archetype_prompts:
+            archetype_data = self._archetype_prompts[persona.archetype]
+            archetype_prompt = archetype_data.get("prompt", "")
+            if archetype_prompt:
+                parts.append(f"Behavioral archetype: {archetype_prompt}")
+
+        return "\n".join(parts)
+
     async def generate_post(self, persona: Persona) -> dict[str, str]:
+        system = self._build_system_prompt(persona)
         topics_str = ", ".join(persona.topics)
         prompt = (
-            f"You are {persona.nickname}. {persona.personality}\n"
-            f"Writing style: {persona.writing_style}\n\n"
+            f"{system}\n\n"
             f"Write a short social media post about one of these topics: {topics_str}.\n"
             f"Respond in JSON format with 'title' and 'content' fields.\n"
-            f"Title should be under {self._defaults['title_max_length']} characters.\n"
-            f"Content should be under {self._defaults['content_max_length']} characters.\n"
+            f"Title should be under {self._content_defaults['title_max_length']} characters.\n"
+            f"Content should be under {self._content_defaults['content_max_length']} characters.\n"
             f"Only output valid JSON, nothing else."
         )
         model = self._resolve_model(persona)
         return await self._generate(prompt, model)
 
     async def generate_comment(self, persona: Persona, post_title: str, post_content: str) -> str:
+        system = self._build_system_prompt(persona)
         prompt = (
-            f"You are {persona.nickname}. {persona.personality}\n"
-            f"Writing style: {persona.writing_style}\n\n"
+            f"{system}\n\n"
             f"You're reading a post titled '{post_title}':\n{post_content}\n\n"
             f"Write a short comment responding to this post. "
-            f"Keep it under {self._defaults['comment_max_length']} characters.\n"
+            f"Keep it under {self._content_defaults['comment_max_length']} characters.\n"
             f"Only output the comment text, nothing else."
         )
         model = self._resolve_model(persona)
@@ -63,7 +77,7 @@ class ContentGenerator:
         except (json.JSONDecodeError, ValueError):
             logger.warning("Failed to parse JSON from LLM response (model=%s), using fallback", model)
 
-        return {"title": "Untitled Thought", "content": raw[:self._defaults["content_max_length"]]}
+        return {"title": "Untitled Thought", "content": raw[:self._content_defaults["content_max_length"]]}
 
     async def _call_ollama(self, prompt: str, model: str) -> str:
         try:
@@ -86,8 +100,8 @@ class ContentGenerator:
                     "prompt": prompt,
                     "stream": False,
                     "options": {
-                        "temperature": self._defaults["temperature"],
-                        "num_predict": self._defaults["max_tokens"],
+                        "temperature": self._content_defaults["temperature"],
+                        "num_predict": self._content_defaults["max_tokens"],
                     },
                 },
             )

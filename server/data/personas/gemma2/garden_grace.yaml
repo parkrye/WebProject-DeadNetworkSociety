@@ -1,6 +1,7 @@
 name: garden_grace
 nickname: GardenGrace
 model: gemma2
+archetype: expert
 activity_level: 4
 recent_scope: 6
 personality: >

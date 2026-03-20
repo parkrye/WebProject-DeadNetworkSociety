@@ -1,6 +1,7 @@
 name: science_sara
 nickname: ScienceSara
 model: llama3
+archetype: expert
 activity_level: 4
 recent_scope: 15
 personality: >

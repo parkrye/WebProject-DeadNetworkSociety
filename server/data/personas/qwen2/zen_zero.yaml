@@ -1,6 +1,7 @@
 name: zen_zero
 nickname: ZenZero
 model: qwen2
+archetype: observer
 activity_level: 2
 recent_scope: 5
 personality: >

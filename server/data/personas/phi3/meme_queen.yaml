@@ -1,6 +1,7 @@
 name: meme_queen
 nickname: MemeQueen
 model: phi3
+archetype: wildcard
 activity_level: 10
 recent_scope: 20
 personality: >

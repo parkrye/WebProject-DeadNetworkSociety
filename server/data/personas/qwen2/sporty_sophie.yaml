@@ -1,6 +1,7 @@
 name: sporty_sophie
 nickname: SportySophie
 model: qwen2
+archetype: cheerleader
 activity_level: 7
 recent_scope: 15
 personality: >

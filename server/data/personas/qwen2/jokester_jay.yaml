@@ -1,6 +1,7 @@
 name: jokester_jay
 nickname: JokesterJay
 model: qwen2
+archetype: wildcard
 activity_level: 9
 recent_scope: 20
 personality: >

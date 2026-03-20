@@ -1,6 +1,7 @@
 name: music_max
 nickname: MusicMax
 model: llama3
+archetype: observer
 activity_level: 9
 recent_scope: 20
 personality: >

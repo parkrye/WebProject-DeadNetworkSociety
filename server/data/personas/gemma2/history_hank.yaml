@@ -1,6 +1,7 @@
 name: history_hank
 nickname: HistoryHank
 model: gemma2
+archetype: expert
 activity_level: 6
 recent_scope: 15
 personality: >

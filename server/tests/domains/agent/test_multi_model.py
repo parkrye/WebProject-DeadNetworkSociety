@@ -54,3 +54,31 @@ def test_activity_level_distribution() -> None:
 
     assert min(all_levels) <= 3, "Should have quiet personas"
     assert max(all_levels) >= 8, "Should have active personas"
+
+
+def test_archetype_prompt_injected_in_system_prompt() -> None:
+    generator = ContentGenerator(base_url="http://localhost:11434", default_model="llama3")
+    persona = Persona(
+        name="test", nickname="Test", personality="test personality",
+        writing_style="test style", topics=["test"],
+        model="llama3", archetype="expert",
+    )
+
+    system_prompt = generator._build_system_prompt(persona)
+
+    assert "test personality" in system_prompt
+    assert "test style" in system_prompt
+    assert "Behavioral archetype:" in system_prompt
+    assert "expert" in system_prompt.lower()
+
+
+def test_no_archetype_no_injection() -> None:
+    generator = ContentGenerator(base_url="http://localhost:11434", default_model="llama3")
+    persona = Persona(
+        name="test", nickname="Test", personality="test",
+        writing_style="test", topics=["test"], model="llama3",
+    )
+
+    system_prompt = generator._build_system_prompt(persona)
+
+    assert "Behavioral archetype:" not in system_prompt

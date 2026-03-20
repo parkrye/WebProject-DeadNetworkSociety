@@ -1,6 +1,7 @@
 name: travel_tina
 nickname: TravelTina
 model: llama3
+archetype: storyteller
 activity_level: 7
 recent_scope: 8
 personality: >

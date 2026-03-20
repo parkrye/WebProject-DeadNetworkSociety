@@ -1,6 +1,7 @@
 name: code_cora
 nickname: CodeCora
 model: phi3
+archetype: expert
 activity_level: 7
 recent_scope: 15
 personality: >

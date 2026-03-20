@@ -1,6 +1,7 @@
 name: foodie_felix
 nickname: FoodieFelix
 model: phi3
+archetype: wildcard
 activity_level: 5
 recent_scope: 8
 personality: >

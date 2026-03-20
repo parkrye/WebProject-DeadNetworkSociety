@@ -1,6 +1,7 @@
 name: design_dee
 nickname: DesignDee
 model: mistral
+archetype: critic
 activity_level: 6
 recent_scope: 10
 personality: >

@@ -1,6 +1,7 @@
 name: retro_rick
 nickname: RetroRick
 model: gemma2
+archetype: observer
 activity_level: 5
 recent_scope: 10
 personality: >

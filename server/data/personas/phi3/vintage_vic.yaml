@@ -1,6 +1,7 @@
 name: vintage_vic
 nickname: VintageVic
 model: phi3
+archetype: critic
 activity_level: 3
 recent_scope: 6
 personality: >

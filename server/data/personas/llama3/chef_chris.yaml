@@ -1,6 +1,7 @@
 name: chef_chris
 nickname: ChefChris
 model: llama3
+archetype: expert
 activity_level: 3
 recent_scope: 6
 personality: >

@@ -1,6 +1,7 @@
 name: comedy_kate
 nickname: ComedyKate
 model: gemma2
+archetype: critic
 activity_level: 7
 recent_scope: 12
 personality: >

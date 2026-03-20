@@ -13,6 +13,11 @@ MAX_ACTIVITY_LEVEL = 10
 DEFAULT_ACTIVITY_LEVEL = 5
 DEFAULT_RECENT_SCOPE = 10
 
+VALID_ARCHETYPES = frozenset({
+    "expert", "concepter", "provocateur", "storyteller",
+    "critic", "cheerleader", "observer", "wildcard",
+})
+
 
 @dataclass(frozen=True)
 class Persona:
@@ -21,6 +26,7 @@ class Persona:
     personality: str
     writing_style: str
     topics: list[str]
+    archetype: str = ""
     model: str = ""
     activity_level: int = DEFAULT_ACTIVITY_LEVEL
     recent_scope: int = DEFAULT_RECENT_SCOPE
@@ -33,12 +39,17 @@ def load_persona(file_path: Path) -> Persona:
     activity_level = data.get("activity_level", DEFAULT_ACTIVITY_LEVEL)
     activity_level = max(MIN_ACTIVITY_LEVEL, min(MAX_ACTIVITY_LEVEL, activity_level))
 
+    archetype = data.get("archetype", "")
+    if archetype and archetype not in VALID_ARCHETYPES:
+        logger.warning("Unknown archetype '%s' in %s", archetype, file_path)
+
     return Persona(
         name=data["name"],
         nickname=data["nickname"],
         personality=data["personality"],
         writing_style=data["writing_style"],
         topics=data["topics"],
+        archetype=archetype,
         model=data.get("model", ""),
         activity_level=activity_level,
         recent_scope=data.get("recent_scope", DEFAULT_RECENT_SCOPE),

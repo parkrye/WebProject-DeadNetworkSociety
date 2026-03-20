@@ -1,6 +1,7 @@
 name: poet_pete
 nickname: PoetPete
 model: llama3
+archetype: storyteller
 activity_level: 4
 recent_scope: 8
 personality: >

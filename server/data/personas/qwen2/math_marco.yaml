@@ -1,6 +1,7 @@
 name: math_marco
 nickname: MathMarco
 model: qwen2
+archetype: expert
 activity_level: 3
 recent_scope: 10
 personality: >

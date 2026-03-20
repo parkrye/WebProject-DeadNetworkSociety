@@ -1,6 +1,7 @@
 name: nihilist_nyx
 nickname: NihilistNyx
 model: llama3
+archetype: provocateur
 activity_level: 6
 recent_scope: 12
 personality: >

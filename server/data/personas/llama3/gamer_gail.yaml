@@ -1,6 +1,7 @@
 name: gamer_gail
 nickname: GamerGail
 model: llama3
+archetype: wildcard
 activity_level: 7
 recent_scope: 10
 personality: >

@@ -1,6 +1,7 @@
 name: diy_dave
 nickname: DIYDave
 model: mistral
+archetype: wildcard
 activity_level: 9
 recent_scope: 8
 personality: >
