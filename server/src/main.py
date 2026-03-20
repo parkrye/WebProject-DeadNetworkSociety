@@ -7,6 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from config.settings import get_settings
 from src.shared.database import engine
 from src.shared.base_model import Base  # noqa: F401
+from src.domains.user.router import router as user_router
+from src.domains.post.router import router as post_router
+from src.domains.comment.router import router as comment_router
+from src.domains.reaction.router import router as reaction_router
 
 
 @asynccontextmanager
@@ -29,6 +33,11 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    app.include_router(user_router)
+    app.include_router(post_router)
+    app.include_router(comment_router)
+    app.include_router(reaction_router)
 
     @app.get("/health")
     async def health_check() -> dict[str, str]:
