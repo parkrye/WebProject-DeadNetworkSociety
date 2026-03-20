@@ -11,21 +11,19 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from src.domains.agent.action_selector import (
     ACTION_COMMENT,
     ACTION_CREATE_POST,
-    ACTION_DISLIKE,
-    ACTION_LIKE,
     ACTION_REPLY,
     AgentAction,
     generate_action_set,
 )
+from src.domains.agent.auto_reaction import auto_react_to_content
 from src.domains.agent.content_generator import ContentGenerator, OllamaUnavailableError
 from src.domains.agent.status_store import update_status
 from src.domains.agent.persona_loader import Persona, load_personas_by_model
 from src.domains.post.repository import PostRepository
 from src.domains.comment.repository import CommentRepository
-from src.domains.reaction.repository import ReactionRepository
 from src.domains.user.repository import UserRepository
 from src.shared.event_bus import event_bus
-from src.shared.events import PostCreated, CommentCreated, ReactionCreated
+from src.shared.events import PostCreated, CommentCreated
 from src.shared.pagination import PaginationParams
 
 logger = logging.getLogger(__name__)
@@ -42,9 +40,7 @@ async def start_all_model_loops(
     session_factory: async_sessionmaker[AsyncSession],
     content_generator: ContentGenerator,
 ) -> None:
-    """Start parallel model loops. Each model runs its own set-based execution loop."""
     grouped = load_personas_by_model()
-
     if not grouped:
         logger.warning("No personas found")
         return
@@ -69,16 +65,13 @@ async def model_loop(
     session_factory: async_sessionmaker[AsyncSession],
     content_generator: ContentGenerator,
 ) -> None:
-    """Run continuous set-based execution for a single model."""
     defaults = _load_scheduler_defaults()
     interval_min = defaults["interval_min_seconds"]
     interval_max = defaults["interval_max_seconds"]
 
     logger.info(
         "Model loop started: %s with %d personas (total actions/set: %d)",
-        model,
-        len(personas),
-        sum(p.activity_level for p in personas),
+        model, len(personas), sum(p.activity_level for p in personas),
     )
 
     while True:
@@ -104,7 +97,6 @@ async def execute_action_set(
     session_factory: async_sessionmaker[AsyncSession],
     content_generator: ContentGenerator,
 ) -> None:
-    """Execute a shuffled set of actions sequentially (one model at a time)."""
     for action in action_set:
         try:
             async with session_factory() as session:
@@ -126,11 +118,9 @@ ACTION_TYPE_LABELS = {
     ACTION_CREATE_POST: "게시글 작성 중",
     ACTION_COMMENT: "댓글 작성 중",
     ACTION_REPLY: "답글 작성 중",
-    ACTION_LIKE: "좋아요 중",
-    ACTION_DISLIKE: "싫어요 중",
 }
 
-NEEDS_POSTS = {ACTION_COMMENT, ACTION_REPLY, ACTION_LIKE, ACTION_DISLIKE}
+NEEDS_POSTS = {ACTION_COMMENT, ACTION_REPLY}
 
 
 async def _execute_action(
@@ -146,7 +136,6 @@ async def _execute_action(
         logger.warning("User not found for persona %s, skipping", persona.nickname)
         return
 
-    # If no posts exist yet, force create_post instead
     if action.action_type in NEEDS_POSTS:
         post_repo = PostRepository(session)
         posts = await post_repo.get_list(PaginationParams(page=1, size=1))
@@ -163,10 +152,6 @@ async def _execute_action(
         await _do_comment(session, user.id, persona, content_generator)
     elif action.action_type == ACTION_REPLY:
         await _do_reply(session, user.id, persona, content_generator)
-    elif action.action_type == ACTION_LIKE:
-        await _do_reaction(session, user.id, persona, "like")
-    elif action.action_type == ACTION_DISLIKE:
-        await _do_reaction(session, user.id, persona, "dislike")
 
     await session.commit()
     update_status(persona.nickname, "대기")
@@ -178,8 +163,6 @@ async def _do_create_post(
     persona: Persona,
     generator: ContentGenerator,
 ) -> None:
-    import uuid
-
     result = await generator.generate_post(persona)
     post_repo = PostRepository(session)
     post = await post_repo.create(
@@ -189,6 +172,11 @@ async def _do_create_post(
     )
     await session.flush()
     await event_bus.publish(PostCreated(post_id=post.id, author_id=post.author_id))
+
+    # Auto-react: other personas like/dislike based on preferences
+    content_text = f"{post.title} {result.get('content', '')}"
+    await auto_react_to_content(session, persona.nickname, content_text, "post", post.id)
+
     logger.info("[%s] Created post: %s", persona.nickname, post.title[:50])
 
 
@@ -214,6 +202,9 @@ async def _do_comment(
     )
     await session.flush()
     await event_bus.publish(CommentCreated(comment_id=comment.id, post_id=post.id, author_id=user_id))
+
+    await auto_react_to_content(session, persona.nickname, comment_text, "comment", comment.id)
+
     logger.info("[%s] Commented on post %s", persona.nickname, post.id)
 
 
@@ -246,37 +237,7 @@ async def _do_reply(
     )
     await session.flush()
     await event_bus.publish(CommentCreated(comment_id=reply.id, post_id=post.id, author_id=user_id))
+
+    await auto_react_to_content(session, persona.nickname, reply_text, "comment", reply.id)
+
     logger.info("[%s] Replied to comment %s", persona.nickname, parent.id)
-
-
-async def _do_reaction(
-    session: AsyncSession,
-    user_id: 'uuid.UUID',
-    persona: Persona,
-    reaction_type: str,
-) -> None:
-    post_repo = PostRepository(session)
-    posts = await post_repo.get_list(PaginationParams(page=1, size=persona.recent_scope))
-    if not posts.items:
-        return
-
-    post = random.choice(posts.items)
-    if post.author_id == user_id:
-        return
-
-    reaction_repo = ReactionRepository(session)
-    existing = await reaction_repo.get_by_user_and_target(user_id, "post", post.id)
-    if existing:
-        return
-
-    await reaction_repo.create(
-        user_id=user_id,
-        target_type="post",
-        target_id=post.id,
-        reaction_type=reaction_type,
-    )
-    await session.flush()
-    await event_bus.publish(
-        ReactionCreated(user_id=user_id, target_type="post", target_id=post.id, reaction_type=reaction_type)
-    )
-    logger.info("[%s] %s on post %s", persona.nickname, reaction_type, post.id)

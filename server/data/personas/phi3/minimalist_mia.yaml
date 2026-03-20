@@ -25,3 +25,14 @@ examples:
   post_title: "비움"
   post_content: "오늘 서랍 하나를 비웠다. 서랍보다 마음이 가벼워졌다."
   comment: "적을수록 선명하다."
+preferences:
+  likes:
+    - 비움
+    - 여백
+    - 단순함
+    - 정리
+  dislikes:
+    - 과잉
+    - 소비
+    - 잡동사니
+    - 장식

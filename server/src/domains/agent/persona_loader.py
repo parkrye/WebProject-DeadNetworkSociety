@@ -27,6 +27,12 @@ class PersonaExamples:
 
 
 @dataclass(frozen=True)
+class PersonaPreferences:
+    likes: list[str] = field(default_factory=list)
+    dislikes: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class Persona:
     name: str
     nickname: str
@@ -39,6 +45,7 @@ class Persona:
     activity_level: int = DEFAULT_ACTIVITY_LEVEL
     recent_scope: int = DEFAULT_RECENT_SCOPE
     examples: PersonaExamples = field(default_factory=PersonaExamples)
+    preferences: PersonaPreferences = field(default_factory=PersonaPreferences)
 
 
 def load_persona(file_path: Path) -> Persona:
@@ -59,6 +66,12 @@ def load_persona(file_path: Path) -> Persona:
         comment=examples_data.get("comment", ""),
     )
 
+    prefs_data = data.get("preferences", {})
+    preferences = PersonaPreferences(
+        likes=prefs_data.get("likes", []),
+        dislikes=prefs_data.get("dislikes", []),
+    )
+
     return Persona(
         name=data["name"],
         nickname=data["nickname"],
@@ -71,6 +84,7 @@ def load_persona(file_path: Path) -> Persona:
         activity_level=activity_level,
         recent_scope=data.get("recent_scope", DEFAULT_RECENT_SCOPE),
         examples=examples,
+        preferences=preferences,
     )
 
 
