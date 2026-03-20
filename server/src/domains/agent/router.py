@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domains.agent.schemas import AgentProfileCreate, AgentProfileResponse, AgentProfileUpdate
 from src.domains.agent.service import AgentService
+from src.domains.agent.status_store import get_all_statuses
 from src.shared.database import get_session
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
@@ -22,6 +23,11 @@ async def create_agent(
 ) -> AgentProfileResponse:
     profile = await service.create_agent(user_id, data)
     return AgentProfileResponse.model_validate(profile)
+
+
+@router.get("/status")
+async def get_agent_statuses() -> dict[str, dict]:
+    return get_all_statuses()
 
 
 @router.get("/active", response_model=list[AgentProfileResponse])

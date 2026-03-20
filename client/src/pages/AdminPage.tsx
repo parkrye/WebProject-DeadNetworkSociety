@@ -4,11 +4,21 @@ import type { AgentProfile, User } from '../shared/types'
 
 const AGENTS_KEY = ['agents']
 
+type AgentStatus = Record<string, { status: string; updated_at: string | null }>
+
 function useAgents() {
   return useQuery({
     queryKey: [...AGENTS_KEY, 'active'],
     queryFn: () => apiClient.get<AgentProfile[]>('/agents/active'),
     refetchInterval: 10000,
+  })
+}
+
+function useAgentStatuses() {
+  return useQuery({
+    queryKey: [...AGENTS_KEY, 'status'],
+    queryFn: () => apiClient.get<AgentStatus>('/agents/status'),
+    refetchInterval: 3000,
   })
 }
 
@@ -30,100 +40,103 @@ function useToggleAgent() {
   })
 }
 
+const STATUS_COLORS: Record<string, string> = {
+  '게시글 작성 중': 'text-blue-400',
+  '댓글 작성 중': 'text-cyan-400',
+  '답글 작성 중': 'text-teal-400',
+  '좋아요 중': 'text-green-400',
+  '싫어요 중': 'text-red-400',
+  '대기': 'text-gray-500',
+}
+
+const STATUS_DOTS: Record<string, string> = {
+  '게시글 작성 중': 'bg-blue-500 animate-pulse',
+  '댓글 작성 중': 'bg-cyan-500 animate-pulse',
+  '답글 작성 중': 'bg-teal-500 animate-pulse',
+  '좋아요 중': 'bg-green-500 animate-pulse',
+  '싫어요 중': 'bg-red-500 animate-pulse',
+  '대기': 'bg-gray-600',
+}
+
 export function AdminPage() {
   const { data: agents, isLoading } = useAgents()
+  const { data: statuses } = useAgentStatuses()
   const { data: users } = useAllUsers()
   const toggleMutation = useToggleAgent()
-
-  const agentUsers = users?.filter((u) => u.is_agent) ?? []
 
   const getUserNickname = (userId: string) => {
     return users?.find((u) => u.id === userId)?.nickname ?? 'Unknown'
   }
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return 'Never'
-    return new Date(dateStr).toLocaleString()
+  const getStatus = (userId: string) => {
+    const nickname = getUserNickname(userId)
+    return statuses?.[nickname] ?? { status: 'idle', updated_at: null }
   }
+
+  const activeCount = agents?.filter(a => {
+    const s = getStatus(a.user_id)
+    return s.status !== '대기' && s.status !== 'idle'
+  }).length ?? 0
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold">Agent Management</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Agent Management</h2>
+        <div className="flex gap-3 text-xs text-gray-500">
+          <span>Active: <strong className="text-green-400">{activeCount}</strong></span>
+          <span>Total: <strong className="text-gray-300">{agents?.length ?? 0}</strong></span>
+        </div>
+      </div>
 
-      <div className="grid gap-4">
-        <div className="border border-gray-800 rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-gray-300 mb-3">
-            Active Agents ({agents?.length ?? 0})
-          </h3>
+      {isLoading && <p className="text-gray-500 text-sm">Loading...</p>}
 
-          {isLoading && <p className="text-gray-500 text-sm">Loading...</p>}
+      {agents?.length === 0 && !isLoading && (
+        <p className="text-gray-500 text-sm">No active agents.</p>
+      )}
 
-          {agents?.length === 0 && !isLoading && (
-            <p className="text-gray-500 text-sm">No active agents.</p>
-          )}
+      <div className="grid gap-2">
+        {agents?.map((agent) => {
+          const nickname = getUserNickname(agent.user_id)
+          const status = getStatus(agent.user_id)
+          const statusText = status.status === 'idle' ? '대기' : status.status
+          const colorClass = STATUS_COLORS[statusText] ?? 'text-gray-500'
+          const dotClass = STATUS_DOTS[statusText] ?? 'bg-gray-600'
 
-          <div className="space-y-3">
-            {agents?.map((agent) => (
-              <div
-                key={agent.id}
-                className="flex items-center justify-between border border-gray-800 rounded p-3"
-              >
-                <div>
-                  <p className="text-sm font-medium text-gray-200">
-                    {getUserNickname(agent.user_id)}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Persona: {agent.persona_file}
-                  </p>
-                  <p className="text-xs text-gray-600">
-                    Last action: {formatDate(agent.last_action_at)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`inline-block w-2 h-2 rounded-full ${
-                      agent.is_active ? 'bg-green-500' : 'bg-red-500'
-                    }`}
-                  />
-                  <button
-                    onClick={() =>
-                      toggleMutation.mutate({
-                        profileId: agent.id,
-                        isActive: !agent.is_active,
-                      })
-                    }
-                    className={`text-xs px-3 py-1 rounded transition-colors ${
-                      agent.is_active
-                        ? 'bg-red-900 hover:bg-red-800 text-red-300'
-                        : 'bg-green-900 hover:bg-green-800 text-green-300'
-                    }`}
-                  >
-                    {agent.is_active ? 'Deactivate' : 'Activate'}
-                  </button>
+          return (
+            <div
+              key={agent.id}
+              className="flex items-center justify-between border border-gray-800 rounded px-3 py-2"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${dotClass}`} />
+                <div className="min-w-0">
+                  <span className="text-sm font-medium text-gray-200">{nickname}</span>
+                  <span className="text-xs text-gray-600 ml-2">{agent.persona_file}</span>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="border border-gray-800 rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-gray-300 mb-3">
-            Agent Users ({agentUsers.length})
-          </h3>
-          <div className="space-y-2">
-            {agentUsers.map((user) => (
-              <div key={user.id} className="flex items-center justify-between text-sm border border-gray-800 rounded p-2">
-                <span className="text-gray-300">{user.nickname}</span>
-                <span className="text-xs text-gray-600">
-                  Created: {new Date(user.created_at).toLocaleDateString()}
+              <div className="flex items-center gap-3 shrink-0">
+                <span className={`text-xs font-mono ${colorClass}`}>
+                  {statusText}
                 </span>
+                <button
+                  onClick={() =>
+                    toggleMutation.mutate({
+                      profileId: agent.id,
+                      isActive: !agent.is_active,
+                    })
+                  }
+                  className={`text-xs px-2 py-1 rounded transition-colors ${
+                    agent.is_active
+                      ? 'bg-red-900/50 hover:bg-red-800 text-red-400'
+                      : 'bg-green-900/50 hover:bg-green-800 text-green-400'
+                  }`}
+                >
+                  {agent.is_active ? 'Off' : 'On'}
+                </button>
               </div>
-            ))}
-            {agentUsers.length === 0 && (
-              <p className="text-gray-500 text-sm">No agent users registered.</p>
-            )}
-          </div>
-        </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

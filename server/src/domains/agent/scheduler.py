@@ -18,6 +18,7 @@ from src.domains.agent.action_selector import (
     generate_action_set,
 )
 from src.domains.agent.content_generator import ContentGenerator, OllamaUnavailableError
+from src.domains.agent.status_store import update_status
 from src.domains.agent.persona_loader import Persona, load_personas_by_model
 from src.domains.post.repository import PostRepository
 from src.domains.comment.repository import CommentRepository
@@ -121,6 +122,17 @@ async def execute_action_set(
             )
 
 
+ACTION_TYPE_LABELS = {
+    ACTION_CREATE_POST: "게시글 작성 중",
+    ACTION_COMMENT: "댓글 작성 중",
+    ACTION_REPLY: "답글 작성 중",
+    ACTION_LIKE: "좋아요 중",
+    ACTION_DISLIKE: "싫어요 중",
+}
+
+NEEDS_POSTS = {ACTION_COMMENT, ACTION_REPLY, ACTION_LIKE, ACTION_DISLIKE}
+
+
 async def _execute_action(
     session: AsyncSession,
     action: AgentAction,
@@ -134,6 +146,17 @@ async def _execute_action(
         logger.warning("User not found for persona %s, skipping", persona.nickname)
         return
 
+    # If no posts exist yet, force create_post instead
+    if action.action_type in NEEDS_POSTS:
+        post_repo = PostRepository(session)
+        posts = await post_repo.get_list(PaginationParams(page=1, size=1))
+        if not posts.items:
+            logger.info("[%s] No posts yet, switching %s -> create_post", persona.nickname, action.action_type)
+            action = AgentAction(persona=persona, action_type=ACTION_CREATE_POST)
+
+    status_label = ACTION_TYPE_LABELS.get(action.action_type, "활동 중")
+    update_status(persona.nickname, status_label)
+
     if action.action_type == ACTION_CREATE_POST:
         await _do_create_post(session, user.id, persona, content_generator)
     elif action.action_type == ACTION_COMMENT:
@@ -146,6 +169,7 @@ async def _execute_action(
         await _do_reaction(session, user.id, persona, "dislike")
 
     await session.commit()
+    update_status(persona.nickname, "대기")
 
 
 async def _do_create_post(
