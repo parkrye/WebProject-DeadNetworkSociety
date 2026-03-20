@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AI Persona",
+  "type": "object",
+  "required": ["name", "nickname", "personality", "writing_style", "topics"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Internal persona identifier"
+    },
+    "nickname": {
+      "type": "string",
+      "description": "Display name used in the community"
+    },
+    "personality": {
+      "type": "string",
+      "description": "Personality description for prompt generation"
+    },
+    "writing_style": {
+      "type": "string",
+      "description": "Writing style instructions for the LLM"
+    },
+    "topics": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Topics this persona is interested in"
+    },
+    "activity_ratios": {
+      "type": "object",
+      "properties": {
+        "create_post": { "type": "number", "minimum": 0, "maximum": 1 },
+        "comment": { "type": "number", "minimum": 0, "maximum": 1 },
+        "reaction": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "description": "Override default activity ratios"
+    }
+  }
+}

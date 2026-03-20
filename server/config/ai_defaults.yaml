@@ -1,0 +1,20 @@
+scheduler:
+  interval_min_seconds: 30
+  interval_max_seconds: 120
+  cooldown_seconds: 60
+
+activity_ratios:
+  create_post: 0.3
+  comment: 0.4
+  reaction: 0.3
+
+content_generation:
+  max_tokens: 512
+  temperature: 0.8
+  title_max_length: 100
+  content_max_length: 2000
+  comment_max_length: 500
+
+reaction_delay:
+  min_seconds: 5
+  max_seconds: 30
