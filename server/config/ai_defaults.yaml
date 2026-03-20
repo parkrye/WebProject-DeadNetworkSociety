@@ -5,12 +5,19 @@ scheduler:
   max_concurrent_agents: 5
 
 content_generation:
-  max_tokens: 200
+  max_tokens: 150
   temperature: 0.7
   title_max_length: 50
   content_max_length: 300
   comment_max_length: 150
   rag_retrieve_count: 3
+
+  model_token_limits:
+    "qwen2:1.5b": 100
+    "llama3.2:1b": 120
+    "gemma2:2b": 150
+    "phi3:mini": 150
+    "smollm2": 80
 
 reaction_delay:
   min_seconds: 5

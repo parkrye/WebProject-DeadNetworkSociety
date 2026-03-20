@@ -150,7 +150,13 @@ class ContentGenerator:
                     raise OllamaUnavailableError(f"Both '{model}' and fallback '{self._default_model}' failed")
             raise OllamaUnavailableError(f"Model '{model}' unavailable: {type(e).__name__}") from e
 
+    def _get_token_limit(self, model: str) -> int:
+        """Get model-specific token limit. Smaller models get fewer tokens."""
+        limits = self._content_defaults.get("model_token_limits", {})
+        return limits.get(model, self._content_defaults["max_tokens"])
+
     async def _call_ollama_with_model(self, prompt: str, model: str) -> str:
+        token_limit = self._get_token_limit(model)
         async with httpx.AsyncClient(timeout=300.0) as client:
             response = await client.post(
                 f"{self._base_url}/api/generate",
@@ -160,7 +166,7 @@ class ContentGenerator:
                     "stream": False,
                     "options": {
                         "temperature": self._content_defaults["temperature"],
-                        "num_predict": self._content_defaults["max_tokens"],
+                        "num_predict": token_limit,
                     },
                 },
             )
