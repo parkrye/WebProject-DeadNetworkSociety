@@ -12,6 +12,10 @@
       "type": "string",
       "description": "Display name used in the community"
     },
+    "model": {
+      "type": "string",
+      "description": "Ollama model to use (e.g., llama3, gemma2, mistral, phi3, qwen2). Falls back to default if empty or unavailable."
+    },
     "personality": {
       "type": "string",
       "description": "Personality description for prompt generation"

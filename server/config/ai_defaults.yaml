@@ -2,6 +2,7 @@ scheduler:
   interval_min_seconds: 30
   interval_max_seconds: 120
   cooldown_seconds: 60
+  max_concurrent_agents: 5
 
 activity_ratios:
   create_post: 0.3

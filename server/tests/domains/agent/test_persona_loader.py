@@ -107,11 +107,64 @@ def test_load_production_personas() -> None:
     # when: loading all production personas
     personas = load_all_personas()
 
-    # then: at least 4 personas exist and are valid
-    assert len(personas) >= 4
+    # then: at least 5 personas exist and are valid
+    assert len(personas) >= 5
     for persona in personas:
         assert persona.name
         assert persona.nickname
         assert persona.personality
         assert persona.writing_style
         assert len(persona.topics) > 0
+
+
+def test_each_persona_has_unique_model() -> None:
+    # given: all production personas
+
+    # when: loading them
+    personas = load_all_personas()
+
+    # then: each persona specifies a model and models are diverse
+    models = [p.model for p in personas]
+    assert all(m for m in models), "All personas should specify a model"
+    assert len(set(models)) >= 3, "At least 3 different models should be used"
+
+
+def test_load_persona_with_model(tmp_path: Path) -> None:
+    # given: a persona with a model field
+    content = """
+name: model_bot
+nickname: ModelBot
+model: gemma2
+personality: A bot with a model
+writing_style: Direct
+topics:
+  - testing
+"""
+    file_path = tmp_path / "model_bot.yaml"
+    file_path.write_text(content, encoding="utf-8")
+
+    # when: loading the persona
+    persona = load_persona(file_path)
+
+    # then: model is parsed
+    assert persona.model == "gemma2"
+
+
+def test_load_persona_without_model_defaults_empty(tmp_path: Path) -> None:
+    # given: a persona without model field
+    content = """
+name: no_model
+nickname: NoModel
+personality: No model specified
+writing_style: Default
+topics:
+  - general
+"""
+    file_path = tmp_path / "no_model.yaml"
+    file_path.write_text(content, encoding="utf-8")
+
+    # when: loading the persona
+    persona = load_persona(file_path)
+
+    # then: model defaults to empty string
+    assert persona.model == ""

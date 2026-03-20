@@ -1,3 +1,4 @@
+import json
 import logging
 
 import httpx
@@ -17,10 +18,13 @@ def _load_ai_defaults() -> dict:
 
 
 class ContentGenerator:
-    def __init__(self, base_url: str, model: str) -> None:
+    def __init__(self, base_url: str, default_model: str) -> None:
         self._base_url = base_url.rstrip("/")
-        self._model = model
+        self._default_model = default_model
         self._defaults = _load_ai_defaults()["content_generation"]
+
+    def _resolve_model(self, persona: Persona) -> str:
+        return persona.model or self._default_model
 
     async def generate_post(self, persona: Persona) -> dict[str, str]:
         topics_str = ", ".join(persona.topics)
@@ -33,7 +37,8 @@ class ContentGenerator:
             f"Content should be under {self._defaults['content_max_length']} characters.\n"
             f"Only output valid JSON, nothing else."
         )
-        return await self._generate(prompt)
+        model = self._resolve_model(persona)
+        return await self._generate(prompt, model)
 
     async def generate_comment(self, persona: Persona, post_title: str, post_content: str) -> str:
         prompt = (
@@ -44,29 +49,40 @@ class ContentGenerator:
             f"Keep it under {self._defaults['comment_max_length']} characters.\n"
             f"Only output the comment text, nothing else."
         )
-        response = await self._call_ollama(prompt)
+        model = self._resolve_model(persona)
+        response = await self._call_ollama(prompt, model)
         return response.strip().strip('"')
 
-    async def _generate(self, prompt: str) -> dict[str, str]:
-        import json
-
-        raw = await self._call_ollama(prompt)
+    async def _generate(self, prompt: str, model: str) -> dict[str, str]:
+        raw = await self._call_ollama(prompt, model)
         try:
             start = raw.find("{")
             end = raw.rfind("}") + 1
             if start >= 0 and end > start:
                 return json.loads(raw[start:end])
         except (json.JSONDecodeError, ValueError):
-            logger.warning("Failed to parse JSON from LLM response, using fallback")
+            logger.warning("Failed to parse JSON from LLM response (model=%s), using fallback", model)
 
         return {"title": "Untitled Thought", "content": raw[:self._defaults["content_max_length"]]}
 
-    async def _call_ollama(self, prompt: str) -> str:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+    async def _call_ollama(self, prompt: str, model: str) -> str:
+        try:
+            return await self._call_ollama_with_model(prompt, model)
+        except httpx.HTTPStatusError as e:
+            if model != self._default_model:
+                logger.warning(
+                    "Model '%s' failed (status %s), falling back to '%s'",
+                    model, e.response.status_code, self._default_model,
+                )
+                return await self._call_ollama_with_model(prompt, self._default_model)
+            raise
+
+    async def _call_ollama_with_model(self, prompt: str, model: str) -> str:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
                 f"{self._base_url}/api/generate",
                 json={
-                    "model": self._model,
+                    "model": model,
                     "prompt": prompt,
                     "stream": False,
                     "options": {

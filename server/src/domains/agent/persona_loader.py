@@ -16,6 +16,7 @@ class Persona:
     personality: str
     writing_style: str
     topics: list[str]
+    model: str = ""
     activity_ratios: dict[str, float] = field(default_factory=dict)
 
 
@@ -29,6 +30,7 @@ def load_persona(file_path: Path) -> Persona:
         personality=data["personality"],
         writing_style=data["writing_style"],
         topics=data["topics"],
+        model=data.get("model", ""),
         activity_ratios=data.get("activity_ratios", {}),
     )
 
