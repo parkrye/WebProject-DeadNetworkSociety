@@ -2,15 +2,7 @@
 Crawl Korean community content for RAG knowledge base.
 
 Usage:
-    python scripts/crawl_communities.py [--append]
-
-Sources:
-    - DCInside (디시인사이드) 인기글
-    - 웃긴대학 베스트
-    - Reddit 한국어 서브레딧
-    - 클리앙 인기글
-    - 루리웹 핫딜/유머
-    - 에펨코리아 인기글
+    python scripts/crawl_communities.py [--append] [--pages N]
 
 Output:
     data/community_content.json
@@ -20,9 +12,8 @@ import json
 import logging
 import random
 import re
-import sys
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
@@ -39,8 +30,9 @@ HEADERS = {
     "Accept-Language": "ko-KR,ko;q=0.9",
 }
 
-MIN_CONTENT_LENGTH = 20
+MIN_CONTENT_LENGTH = 15
 MAX_CONTENT_LENGTH = 500
+DEFAULT_PAGES = 5
 
 
 @dataclass
@@ -55,229 +47,340 @@ def clean_text(text: str) -> str:
     text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r"\[.*?\]", "", text)
     text = re.sub(r"https?://\S+", "", text)
+    text = re.sub(r"[#@]\S+", "", text)
     return text.strip()
 
 
 def is_valid_korean(text: str) -> bool:
     korean_chars = sum(1 for c in text if "\uac00" <= c <= "\ud7a3")
-    return korean_chars >= len(text) * 0.3 and len(text) >= MIN_CONTENT_LENGTH
+    return korean_chars >= len(text) * 0.25 and len(text) >= MIN_CONTENT_LENGTH
+
+
+def _sleep():
+    time.sleep(random.uniform(1.0, 2.5))
 
 
 # ──────────────────────────────────────────
-# Source: DCInside 인기글
+# DCInside - 멀티페이지, 갤러리 확대
 # ──────────────────────────────────────────
 
-def crawl_dcinside() -> list[CrawledPost]:
+def crawl_dcinside(pages: int = DEFAULT_PAGES) -> list[CrawledPost]:
     posts: list[CrawledPost] = []
     galleries = [
-        ("hit", "인기"),
-        ("domestic_travel", "여행"),
-        ("cook", "요리"),
-        ("movie", "영화"),
-        ("music", "음악"),
-        ("game", "게임"),
-        ("sport", "스포츠"),
-        ("cat", "동물"),
+        ("hit", "인기"), ("humor_new2", "유머"), ("cook", "요리"),
+        ("movie", "영화"), ("music_new1", "음악"), ("game", "게임"),
+        ("baseball_new11", "스포츠"), ("cat", "동물"), ("travel", "여행"),
+        ("car", "자동차"), ("stock", "경제"), ("programming", "기술"),
+        ("diet", "건강"), ("fashion", "패션"), ("photo", "사진"),
     ]
 
     for gallery_id, topic in galleries:
-        try:
-            url = f"https://gall.dcinside.com/board/lists/?id={gallery_id}&page=1"
-            resp = httpx.get(url, headers=HEADERS, timeout=15.0, follow_redirects=True)
-            soup = BeautifulSoup(resp.text, "html.parser")
+        for page in range(1, pages + 1):
+            try:
+                url = f"https://gall.dcinside.com/board/lists/?id={gallery_id}&page={page}"
+                resp = httpx.get(url, headers=HEADERS, timeout=15.0, follow_redirects=True)
+                if resp.status_code != 200:
+                    break
+                soup = BeautifulSoup(resp.text, "html.parser")
+                rows = soup.select("tr.ub-content")
+                if not rows:
+                    break
 
-            rows = soup.select("tr.ub-content")
-            for row in rows[:10]:
-                title_el = row.select_one("td.gall_tit a")
-                if not title_el:
-                    continue
-                title = clean_text(title_el.get_text())
-                if not title or len(title) < 5:
-                    continue
+                for row in rows:
+                    title_el = row.select_one("td.gall_tit a")
+                    if not title_el:
+                        continue
+                    title = clean_text(title_el.get_text())
+                    if title and is_valid_korean(title):
+                        posts.append(CrawledPost(
+                            title=title[:100], content=title[:MAX_CONTENT_LENGTH],
+                            source="dcinside", topic=topic,
+                        ))
+                _sleep()
+            except Exception:
+                logger.warning("DCInside [%s] page %d failed", gallery_id, page)
 
-                # Get preview text from title
-                subject = row.select_one("td.gall_subject")
-                content = title  # Use title as content since list page
+        logger.info("DCInside [%s]: done", gallery_id)
 
-                if is_valid_korean(title):
-                    posts.append(CrawledPost(title=title[:100], content=content[:MAX_CONTENT_LENGTH],
-                                             source="dcinside", topic=topic))
-
-            logger.info("DCInside [%s]: %d posts", gallery_id, len([p for p in posts if p.source == "dcinside"]))
-            time.sleep(random.uniform(1, 2))
-        except Exception:
-            logger.exception("DCInside [%s] failed", gallery_id)
-
+    logger.info("DCInside total: %d posts", len(posts))
     return posts
 
 
 # ──────────────────────────────────────────
-# Source: Reddit 한국어 서브레딧
+# Reddit - 멀티페이지(after 파라미터), 서브레딧 확대
 # ──────────────────────────────────────────
 
-def crawl_reddit() -> list[CrawledPost]:
+def crawl_reddit(pages: int = DEFAULT_PAGES) -> list[CrawledPost]:
     posts: list[CrawledPost] = []
     subreddits = [
-        ("korea", "한국"),
-        ("hanguk", "일상"),
-        ("korean", "언어"),
-        ("kpop", "음악"),
-        ("kdrama", "드라마"),
+        ("hanguk", "일상"), ("korea", "한국"), ("korean", "언어"),
+        ("kpop", "음악"), ("kdrama", "드라마"), ("koreatravel", "여행"),
     ]
+    reddit_headers = {**HEADERS, "User-Agent": "DeadNetworkSociety/1.0"}
 
     for sub, topic in subreddits:
+        after = None
+        for page in range(pages):
+            try:
+                url = f"https://old.reddit.com/r/{sub}/hot.json?limit=100"
+                if after:
+                    url += f"&after={after}"
+                resp = httpx.get(url, headers=reddit_headers, timeout=15.0)
+                data = resp.json()
+                children = data.get("data", {}).get("children", [])
+                after = data.get("data", {}).get("after")
+
+                for child in children:
+                    pd = child.get("data", {})
+                    title = clean_text(pd.get("title", ""))
+                    selftext = clean_text(pd.get("selftext", ""))
+                    content = selftext if selftext else title
+                    if is_valid_korean(title) or is_valid_korean(content):
+                        posts.append(CrawledPost(
+                            title=title[:100], content=content[:MAX_CONTENT_LENGTH],
+                            source="reddit", topic=topic,
+                        ))
+
+                if not after:
+                    break
+                _sleep()
+            except Exception:
+                logger.warning("Reddit r/%s page %d failed", sub, page)
+
+        logger.info("Reddit r/%s: done", sub)
+
+    logger.info("Reddit total: %d posts", len(posts))
+    return posts
+
+
+# ──────────────────────────────────────────
+# X (Twitter) - nitter 인스턴스 활용
+# ──────────────────────────────────────────
+
+def crawl_x(pages: int = DEFAULT_PAGES) -> list[CrawledPost]:
+    posts: list[CrawledPost] = []
+    # nitter 인스턴스들 (public)
+    nitter_instances = [
+        "https://nitter.privacydev.net",
+        "https://nitter.poast.org",
+        "https://nitter.cz",
+    ]
+    # 한국어 검색어
+    searches = [
+        ("한국", "한국"), ("일상", "일상"), ("맛집", "요리"),
+        ("게임", "게임"), ("영화", "영화"), ("음악추천", "음악"),
+        ("운동", "건강"), ("여행", "여행"), ("코딩", "기술"),
+    ]
+
+    for search_term, topic in searches:
+        found = False
+        for base_url in nitter_instances:
+            if found:
+                break
+            try:
+                url = f"{base_url}/search?q={search_term}&f=tweets&lang=ko"
+                resp = httpx.get(url, headers=HEADERS, timeout=10.0, follow_redirects=True)
+                if resp.status_code != 200:
+                    continue
+                soup = BeautifulSoup(resp.text, "html.parser")
+                tweets = soup.select("div.tweet-content")
+
+                for tweet in tweets[:30]:
+                    text = clean_text(tweet.get_text())
+                    if is_valid_korean(text):
+                        # 첫 문장을 제목으로, 전체를 본문으로
+                        title = text[:50].split(".")[0].split("?")[0].split("!")[0]
+                        posts.append(CrawledPost(
+                            title=title[:100], content=text[:MAX_CONTENT_LENGTH],
+                            source="x", topic=topic,
+                        ))
+
+                if tweets:
+                    found = True
+                    logger.info("X [%s] via %s: %d tweets", search_term, base_url.split("//")[1], len(tweets))
+                _sleep()
+            except Exception:
+                continue
+
+        if not found:
+            logger.warning("X [%s]: all nitter instances failed", search_term)
+
+    logger.info("X total: %d posts", len(posts))
+    return posts
+
+
+# ──────────────────────────────────────────
+# 클리앙 - 멀티페이지
+# ──────────────────────────────────────────
+
+def crawl_clien(pages: int = DEFAULT_PAGES) -> list[CrawledPost]:
+    posts: list[CrawledPost] = []
+    boards = [
+        ("park", "일상"), ("jirum", "쇼핑"), ("news", "뉴스"),
+        ("food", "요리"), ("use", "기술"),
+    ]
+
+    for board, topic in boards:
+        for page in range(pages):
+            try:
+                url = f"https://www.clien.net/service/board/{board}?&od=T31&po={page}"
+                resp = httpx.get(url, headers=HEADERS, timeout=15.0, follow_redirects=True)
+                soup = BeautifulSoup(resp.text, "html.parser")
+                items = soup.select("div.list_item")
+                if not items:
+                    break
+
+                for item in items:
+                    title_el = item.select_one("span.subject_fixed")
+                    if not title_el:
+                        continue
+                    title = clean_text(title_el.get_text())
+                    if is_valid_korean(title):
+                        posts.append(CrawledPost(
+                            title=title[:100], content=title[:MAX_CONTENT_LENGTH],
+                            source="clien", topic=topic,
+                        ))
+                _sleep()
+            except Exception:
+                logger.warning("Clien [%s] page %d failed", board, page)
+
+        logger.info("Clien [%s]: done", board)
+
+    logger.info("Clien total: %d posts", len(posts))
+    return posts
+
+
+# ──────────────────────────────────────────
+# 루리웹 - 멀티페이지
+# ──────────────────────────────────────────
+
+def crawl_ruliweb(pages: int = DEFAULT_PAGES) -> list[CrawledPost]:
+    posts: list[CrawledPost] = []
+    boards = [
+        ("best/humor", "유머"), ("best/game", "게임"),
+        ("best/community", "일상"), ("best/hobby", "취미"),
+    ]
+
+    for board, topic in boards:
+        for page in range(1, pages + 1):
+            try:
+                url = f"https://bbs.ruliweb.com/{board}?page={page}"
+                resp = httpx.get(url, headers=HEADERS, timeout=15.0, follow_redirects=True)
+                soup = BeautifulSoup(resp.text, "html.parser")
+                items = soup.select("tr.table_body")
+                if not items:
+                    break
+
+                for item in items:
+                    title_el = item.select_one("a.deco")
+                    if not title_el:
+                        continue
+                    title = clean_text(title_el.get_text())
+                    if is_valid_korean(title):
+                        posts.append(CrawledPost(
+                            title=title[:100], content=title[:MAX_CONTENT_LENGTH],
+                            source="ruliweb", topic=topic,
+                        ))
+                _sleep()
+            except Exception:
+                logger.warning("Ruliweb [%s] page %d failed", board, page)
+
+        logger.info("Ruliweb [%s]: done", board)
+
+    logger.info("Ruliweb total: %d posts", len(posts))
+    return posts
+
+
+# ──────────────────────────────────────────
+# 에펨코리아 - 멀티페이지
+# ──────────────────────────────────────────
+
+def crawl_fmkorea(pages: int = DEFAULT_PAGES) -> list[CrawledPost]:
+    posts: list[CrawledPost] = []
+    boards = [("best", "인기"), ("humor", "유머"), ("issue", "이슈")]
+
+    for board, topic in boards:
+        for page in range(1, pages + 1):
+            try:
+                url = f"https://www.fmkorea.com/{board}?page={page}"
+                resp = httpx.get(url, headers=HEADERS, timeout=15.0, follow_redirects=True)
+                soup = BeautifulSoup(resp.text, "html.parser")
+                items = soup.select("li.li")
+                if not items:
+                    break
+
+                for item in items:
+                    title_el = item.select_one("h3.title a")
+                    if not title_el:
+                        continue
+                    title = clean_text(title_el.get_text())
+                    if is_valid_korean(title):
+                        posts.append(CrawledPost(
+                            title=title[:100], content=title[:MAX_CONTENT_LENGTH],
+                            source="fmkorea", topic=topic,
+                        ))
+                _sleep()
+            except Exception:
+                logger.warning("FMKorea [%s] page %d failed", board, page)
+
+        logger.info("FMKorea [%s]: done", board)
+
+    logger.info("FMKorea total: %d posts", len(posts))
+    return posts
+
+
+# ──────────────────────────────────────────
+# 웃긴대학 - 멀티페이지
+# ──────────────────────────────────────────
+
+def crawl_humoruniv(pages: int = DEFAULT_PAGES) -> list[CrawledPost]:
+    posts: list[CrawledPost] = []
+    for page in range(pages):
         try:
-            url = f"https://old.reddit.com/r/{sub}/hot.json?limit=25"
-            resp = httpx.get(url, headers={**HEADERS, "User-Agent": "DeadNetworkSociety/1.0"}, timeout=15.0)
-            data = resp.json()
+            url = f"https://web.humoruniv.com/board/humor/list.html?table=pds&pg={page}"
+            resp = httpx.get(url, headers=HEADERS, timeout=15.0, follow_redirects=True)
+            soup = BeautifulSoup(resp.text, "html.parser")
 
-            for child in data.get("data", {}).get("children", []):
-                post_data = child.get("data", {})
-                title = clean_text(post_data.get("title", ""))
-                selftext = clean_text(post_data.get("selftext", ""))
-                content = selftext if selftext else title
-
-                if is_valid_korean(title) or is_valid_korean(content):
+            for a_tag in soup.select("a"):
+                title = clean_text(a_tag.get_text())
+                if is_valid_korean(title) and len(title) > 10:
                     posts.append(CrawledPost(
-                        title=title[:100],
-                        content=content[:MAX_CONTENT_LENGTH],
-                        source="reddit",
-                        topic=topic,
+                        title=title[:100], content=title[:MAX_CONTENT_LENGTH],
+                        source="humoruniv", topic="유머",
                     ))
-
-            logger.info("Reddit r/%s: %d posts found", sub, len([p for p in posts if p.topic == topic]))
-            time.sleep(random.uniform(1, 2))
+            _sleep()
         except Exception:
-            logger.exception("Reddit r/%s failed", sub)
+            logger.warning("Humoruniv page %d failed", page)
 
+    logger.info("Humoruniv total: %d posts", len(posts))
     return posts
 
 
 # ──────────────────────────────────────────
-# Source: 클리앙 인기글
+# 더쿠 (TheQoo)
 # ──────────────────────────────────────────
 
-def crawl_clien() -> list[CrawledPost]:
+def crawl_theqoo(pages: int = DEFAULT_PAGES) -> list[CrawledPost]:
     posts: list[CrawledPost] = []
-    boards = [
-        ("park", "일상"),
-        ("jirum", "쇼핑"),
-        ("news", "뉴스"),
-    ]
-
-    for board, topic in boards:
+    for page in range(1, pages + 1):
         try:
-            url = f"https://www.clien.net/service/board/{board}?type=recommend"
+            url = f"https://theqoo.net/hot?page={page}"
             resp = httpx.get(url, headers=HEADERS, timeout=15.0, follow_redirects=True)
             soup = BeautifulSoup(resp.text, "html.parser")
+            items = soup.select("a.document_title")
 
-            items = soup.select("div.list_item")
-            for item in items[:15]:
-                title_el = item.select_one("span.subject_fixed")
-                if not title_el:
-                    continue
-                title = clean_text(title_el.get_text())
+            for item in items:
+                title = clean_text(item.get_text())
                 if is_valid_korean(title):
-                    posts.append(CrawledPost(title=title[:100], content=title[:MAX_CONTENT_LENGTH],
-                                             source="clien", topic=topic))
-
-            logger.info("Clien [%s]: %d posts", board, len([p for p in posts if p.topic == topic]))
-            time.sleep(random.uniform(1, 2))
+                    posts.append(CrawledPost(
+                        title=title[:100], content=title[:MAX_CONTENT_LENGTH],
+                        source="theqoo", topic="연예",
+                    ))
+            _sleep()
         except Exception:
-            logger.exception("Clien [%s] failed", board)
+            logger.warning("TheQoo page %d failed", page)
 
-    return posts
-
-
-# ──────────────────────────────────────────
-# Source: 루리웹
-# ──────────────────────────────────────────
-
-def crawl_ruliweb() -> list[CrawledPost]:
-    posts: list[CrawledPost] = []
-    boards = [
-        ("best/humor", "유머"),
-        ("best/game", "게임"),
-        ("best/community", "일상"),
-    ]
-
-    for board, topic in boards:
-        try:
-            url = f"https://bbs.ruliweb.com/{board}"
-            resp = httpx.get(url, headers=HEADERS, timeout=15.0, follow_redirects=True)
-            soup = BeautifulSoup(resp.text, "html.parser")
-
-            items = soup.select("tr.table_body")
-            for item in items[:15]:
-                title_el = item.select_one("a.deco")
-                if not title_el:
-                    continue
-                title = clean_text(title_el.get_text())
-                if is_valid_korean(title):
-                    posts.append(CrawledPost(title=title[:100], content=title[:MAX_CONTENT_LENGTH],
-                                             source="ruliweb", topic=topic))
-
-            logger.info("Ruliweb [%s]: %d posts", board, len([p for p in posts if p.topic == topic]))
-            time.sleep(random.uniform(1, 2))
-        except Exception:
-            logger.exception("Ruliweb [%s] failed", board)
-
-    return posts
-
-
-# ──────────────────────────────────────────
-# Source: 에펨코리아
-# ──────────────────────────────────────────
-
-def crawl_fmkorea() -> list[CrawledPost]:
-    posts: list[CrawledPost] = []
-    try:
-        url = "https://www.fmkorea.com/best"
-        resp = httpx.get(url, headers=HEADERS, timeout=15.0, follow_redirects=True)
-        soup = BeautifulSoup(resp.text, "html.parser")
-
-        items = soup.select("li.li")
-        for item in items[:20]:
-            title_el = item.select_one("h3.title a")
-            if not title_el:
-                continue
-            title = clean_text(title_el.get_text())
-            if is_valid_korean(title):
-                posts.append(CrawledPost(title=title[:100], content=title[:MAX_CONTENT_LENGTH],
-                                         source="fmkorea", topic="일상"))
-
-        logger.info("FMKorea: %d posts", len(posts))
-    except Exception:
-        logger.exception("FMKorea failed")
-
-    return posts
-
-
-# ──────────────────────────────────────────
-# Source: 웃긴대학
-# ──────────────────────────────────────────
-
-def crawl_humoruniv() -> list[CrawledPost]:
-    posts: list[CrawledPost] = []
-    try:
-        url = "https://web.humoruniv.com/board/humor/list.html?table=pds&pg=0"
-        resp = httpx.get(url, headers=HEADERS, timeout=15.0, follow_redirects=True)
-        soup = BeautifulSoup(resp.text, "html.parser")
-
-        items = soup.select("table.kboard-list tr")
-        for item in items[:20]:
-            title_el = item.select_one("td.kboard-list-title a")
-            if not title_el:
-                continue
-            title = clean_text(title_el.get_text())
-            if is_valid_korean(title):
-                posts.append(CrawledPost(title=title[:100], content=title[:MAX_CONTENT_LENGTH],
-                                         source="humoruniv", topic="유머"))
-
-        logger.info("Humoruniv: %d posts", len(posts))
-    except Exception:
-        logger.exception("Humoruniv failed")
-
+    logger.info("TheQoo total: %d posts", len(posts))
     return posts
 
 
@@ -288,14 +391,16 @@ def crawl_humoruniv() -> list[CrawledPost]:
 ALL_CRAWLERS = [
     ("DCInside", crawl_dcinside),
     ("Reddit", crawl_reddit),
+    ("X", crawl_x),
     ("Clien", crawl_clien),
     ("Ruliweb", crawl_ruliweb),
     ("FMKorea", crawl_fmkorea),
     ("Humoruniv", crawl_humoruniv),
+    ("TheQoo", crawl_theqoo),
 ]
 
 
-def main(append: bool = False) -> None:
+def main(append: bool = False, pages: int = DEFAULT_PAGES) -> None:
     existing: dict[str, list[dict]] = {}
     if append and OUTPUT_PATH.exists():
         with open(OUTPUT_PATH, "r", encoding="utf-8") as f:
@@ -306,37 +411,42 @@ def main(append: bool = False) -> None:
     all_posts: list[CrawledPost] = []
 
     for name, crawler in ALL_CRAWLERS:
-        logger.info("Crawling %s...", name)
+        logger.info("=== Crawling %s (%d pages) ===", name, pages)
         try:
-            posts = crawler()
+            posts = crawler(pages)
             all_posts.extend(posts)
-            logger.info("%s: %d posts collected", name, len(posts))
         except Exception:
-            logger.exception("%s crawler failed completely", name)
+            logger.exception("%s crawler failed", name)
 
-    # Group by topic
+    # Group by topic, deduplicate
     by_topic: dict[str, list[dict]] = dict(existing)
     for post in all_posts:
         if post.topic not in by_topic:
             by_topic[post.topic] = []
         entry = {"title": post.title, "content": post.content, "source": post.source}
-        # Deduplicate by title
         existing_titles = {item["title"] for item in by_topic[post.topic]}
         if post.title not in existing_titles:
             by_topic[post.topic].append(entry)
 
-    # Write output
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(by_topic, f, ensure_ascii=False, indent=1)
 
     total = sum(len(v) for v in by_topic.values())
-    logger.info("Done: %d items across %d topics -> %s (%.0f KB)",
+    logger.info("\n=== Summary ===")
+    for topic, items in sorted(by_topic.items(), key=lambda x: -len(x[1])):
+        sources = {}
+        for item in items:
+            s = item.get("source", "?")
+            sources[s] = sources.get(s, 0) + 1
+        logger.info("  %s: %d items %s", topic, len(items), dict(sources))
+    logger.info("Total: %d items, %d topics -> %s (%.0f KB)",
                 total, len(by_topic), OUTPUT_PATH, OUTPUT_PATH.stat().st_size / 1024)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--append", action="store_true", help="Append to existing data")
+    parser.add_argument("--pages", type=int, default=DEFAULT_PAGES, help="Pages per source")
     args = parser.parse_args()
-    main(append=args.append)
+    main(append=args.append, pages=args.pages)

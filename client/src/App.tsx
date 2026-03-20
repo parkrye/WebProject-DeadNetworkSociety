@@ -6,11 +6,13 @@ import { AdminPage } from './pages/AdminPage'
 import { userApi } from './domains/user/api'
 
 const STORAGE_KEY = 'dns_user'
+const ANON_NICKNAME = '이름없는오가닉유저'
 
 function App() {
   const [userId, setUserId] = useState<string | null>(null)
   const [nickname, setNickname] = useState('')
   const [nicknameInput, setNicknameInput] = useState('')
+  const [isAnon, setIsAnon] = useState(false)
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
@@ -19,9 +21,23 @@ function App() {
         const { id, nickname: name } = JSON.parse(saved)
         setUserId(id)
         setNickname(name)
+        setIsAnon(name === ANON_NICKNAME)
+        return
       } catch { /* ignore */ }
     }
+    // Auto-create anonymous user
+    initAnonymousUser()
   }, [])
+
+  const initAnonymousUser = async () => {
+    try {
+      const user = await userApi.login(ANON_NICKNAME)
+      setUserId(user.id)
+      setNickname(user.nickname)
+      setIsAnon(true)
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: user.id, nickname: user.nickname }))
+    } catch { /* ignore */ }
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,16 +46,17 @@ function App() {
       const user = await userApi.login(nicknameInput.trim())
       setUserId(user.id)
       setNickname(user.nickname)
+      setIsAnon(false)
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: user.id, nickname: user.nickname }))
+      setNicknameInput('')
     } catch {
       alert('접속에 실패했습니다. 다시 시도해주세요.')
     }
   }
 
-  const handleLogout = () => {
-    setUserId(null)
-    setNickname('')
-    localStorage.removeItem(STORAGE_KEY)
+  const handleLogout = async () => {
+    // Revert to anonymous
+    await initAnonymousUser()
   }
 
   return (
@@ -59,35 +76,33 @@ function App() {
               </Link>
             </nav>
           </div>
-          {userId ? (
-            <div className="flex items-center gap-3 text-sm">
-              <span className="text-gray-400">
+          <div className="flex items-center gap-3 text-sm">
+            {!isAnon && nickname && (
+              <>
                 <strong className="text-gray-200">{nickname}</strong>
-              </span>
-              <button
-                onClick={handleLogout}
-                className="text-gray-500 hover:text-gray-300 transition-colors"
-              >
-                로그아웃
-              </button>
-            </div>
-          ) : (
-            <form onSubmit={handleLogin} className="flex gap-2">
-              <input
-                type="text"
-                value={nicknameInput}
-                onChange={(e) => setNicknameInput(e.target.value)}
-                placeholder="닉네임 입력..."
-                className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-gray-500"
-              />
-              <button
-                type="submit"
-                className="bg-indigo-600 hover:bg-indigo-500 text-sm px-3 py-1 rounded transition-colors"
-              >
-                입장
-              </button>
-            </form>
-          )}
+                <button onClick={handleLogout} className="text-gray-500 hover:text-gray-300 transition-colors">
+                  로그아웃
+                </button>
+              </>
+            )}
+            {isAnon && (
+              <form onSubmit={handleLogin} className="flex gap-2">
+                <input
+                  type="text"
+                  value={nicknameInput}
+                  onChange={(e) => setNicknameInput(e.target.value)}
+                  placeholder="닉네임 입력 (선택)"
+                  className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-gray-500"
+                />
+                <button
+                  type="submit"
+                  className="bg-indigo-600 hover:bg-indigo-500 text-sm px-3 py-1 rounded transition-colors"
+                >
+                  닉네임 설정
+                </button>
+              </form>
+            )}
+          </div>
         </header>
         <main className="mx-auto max-w-2xl px-4 py-8">
           <Routes>
