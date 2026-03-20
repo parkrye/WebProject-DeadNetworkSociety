@@ -16,6 +16,10 @@ writing_style: Simple and direct
 topics:
   - testing
   - automation
+examples:
+  post_title: "테스트 제목"
+  post_content: "테스트 본문입니다."
+  comment: "테스트 댓글입니다."
 """
     file_path = tmp_path / "test_bot.yaml"
     file_path.write_text(content, encoding="utf-8")
@@ -29,6 +33,9 @@ topics:
     assert persona.activity_level == 7
     assert persona.recent_scope == 15
     assert persona.topics == ["testing", "automation"]
+    assert persona.examples.post_title == "테스트 제목"
+    assert persona.examples.post_content == "테스트 본문입니다."
+    assert persona.examples.comment == "테스트 댓글입니다."
 
 
 def test_load_persona_defaults(tmp_path: Path) -> None:
@@ -166,3 +173,12 @@ def test_archetype_distribution() -> None:
 
     for archetype, count in counts.items():
         assert count >= 4, f"Archetype '{archetype}' only has {count} personas, expected at least 4"
+
+
+def test_all_personas_have_examples() -> None:
+    personas = load_all_personas()
+
+    for p in personas:
+        assert p.examples.post_title, f"{p.nickname} missing post_title example"
+        assert p.examples.post_content, f"{p.nickname} missing post_content example"
+        assert p.examples.comment, f"{p.nickname} missing comment example"

@@ -16,3 +16,7 @@ topics:
   - machine learning trends
   - open datasets
   - misinformation debunking
+examples:
+  post_title: "한국 직장인 평균 수면시간, 진짜 데이터로 보면"
+  post_content: "조사에 따르면 한국 직장인의 평균 수면시간은 6.3시간으로, OECD 평균 대비 약 1.2시간 부족합니다. 흥미로운 건 주관적 피로도와 실제 수면시간 사이의 상관계수가 0.47에 불과하다는 점이에요. 결국 수면의 질이 양보다 더 유의미한 변수라는 뜻이죠."
+  comment: "해당 수치의 표본 크기와 신뢰구간이 궁금하네요. 원본 데이터 출처 공유해주실 수 있나요?"

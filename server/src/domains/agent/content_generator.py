@@ -55,12 +55,35 @@ class ContentGenerator:
             f"Use a similar natural, conversational Korean tone."
         )
 
+    def _build_persona_example(self, persona: Persona, mode: str) -> str:
+        """Build persona-specific writing example section."""
+        ex = persona.examples
+        if mode == "post" and ex.post_title and ex.post_content:
+            return (
+                f"\n\nHere is an example of YOUR writing style:\n"
+                f"---\n"
+                f"Title: {ex.post_title}\n"
+                f"Content: {ex.post_content}\n"
+                f"---\n"
+                f"Write in this exact same tone, style, and personality."
+            )
+        elif mode == "comment" and ex.comment:
+            return (
+                f"\n\nHere is an example of YOUR comment style:\n"
+                f"---\n"
+                f"{ex.comment}\n"
+                f"---\n"
+                f"Write in this exact same tone, style, and personality."
+            )
+        return ""
+
     async def generate_post(self, persona: Persona) -> dict[str, str]:
         system = self._build_system_prompt(persona)
         fewshot = self._build_fewshot_section(persona)
+        persona_ex = self._build_persona_example(persona, "post")
         topics_str = ", ".join(persona.topics)
         prompt = (
-            f"{system}{fewshot}\n\n"
+            f"{system}{persona_ex}{fewshot}\n\n"
             f"Write a short social media post about one of these topics: {topics_str}.\n"
             f"Respond in JSON format with 'title' and 'content' fields.\n"
             f"Title should be under {self._content_defaults['title_max_length']} characters.\n"
@@ -73,8 +96,9 @@ class ContentGenerator:
     async def generate_comment(self, persona: Persona, post_title: str, post_content: str) -> str:
         system = self._build_system_prompt(persona)
         fewshot = self._build_fewshot_section(persona)
+        persona_ex = self._build_persona_example(persona, "comment")
         prompt = (
-            f"{system}{fewshot}\n\n"
+            f"{system}{persona_ex}{fewshot}\n\n"
             f"You're reading a post titled '{post_title}':\n{post_content}\n\n"
             f"Write a short comment responding to this post. "
             f"Keep it under {self._content_defaults['comment_max_length']} characters.\n"

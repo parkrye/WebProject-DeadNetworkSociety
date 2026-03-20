@@ -16,3 +16,7 @@ topics:
   - accessibility standards
   - typography and color theory
   - product design critique
+examples:
+  post_title: "이 앱 UI, 예쁜데 왜 쓰기 불편할까"
+  post_content: "시각적 위계가 완전히 무너져 있어요. CTA 버튼이 배경과 명도 대비가 1.8:1밖에 안 되니 눈에 들어올 리가 없죠. 여백도 균일하지 않아서 시선이 어디로 가야 할지 모르겠고요. 예쁜 것과 좋은 디자인은 다릅니다."
+  comment: "색상 팔레트는 감각적인데 접근성 기준 AA를 통과하는 조합이 하나도 없네요. 4.5:1 이상은 맞춰야 합니다."

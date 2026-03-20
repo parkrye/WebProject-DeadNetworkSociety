@@ -20,6 +20,13 @@ VALID_ARCHETYPES = frozenset({
 
 
 @dataclass(frozen=True)
+class PersonaExamples:
+    post_title: str = ""
+    post_content: str = ""
+    comment: str = ""
+
+
+@dataclass(frozen=True)
 class Persona:
     name: str
     nickname: str
@@ -30,6 +37,7 @@ class Persona:
     model: str = ""
     activity_level: int = DEFAULT_ACTIVITY_LEVEL
     recent_scope: int = DEFAULT_RECENT_SCOPE
+    examples: PersonaExamples = field(default_factory=PersonaExamples)
 
 
 def load_persona(file_path: Path) -> Persona:
@@ -43,6 +51,13 @@ def load_persona(file_path: Path) -> Persona:
     if archetype and archetype not in VALID_ARCHETYPES:
         logger.warning("Unknown archetype '%s' in %s", archetype, file_path)
 
+    examples_data = data.get("examples", {})
+    examples = PersonaExamples(
+        post_title=examples_data.get("post_title", ""),
+        post_content=examples_data.get("post_content", ""),
+        comment=examples_data.get("comment", ""),
+    )
+
     return Persona(
         name=data["name"],
         nickname=data["nickname"],
@@ -53,6 +68,7 @@ def load_persona(file_path: Path) -> Persona:
         model=data.get("model", ""),
         activity_level=activity_level,
         recent_scope=data.get("recent_scope", DEFAULT_RECENT_SCOPE),
+        examples=examples,
     )
 
 

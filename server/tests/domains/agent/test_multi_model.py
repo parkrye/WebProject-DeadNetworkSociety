@@ -1,5 +1,5 @@
 from src.domains.agent.content_generator import ContentGenerator
-from src.domains.agent.persona_loader import Persona, load_personas_by_model
+from src.domains.agent.persona_loader import Persona, PersonaExamples, load_personas_by_model
 from src.domains.agent.action_selector import generate_action_set, ALL_ACTIONS
 
 
@@ -82,3 +82,50 @@ def test_no_archetype_no_injection() -> None:
     system_prompt = generator._build_system_prompt(persona)
 
     assert "Behavioral archetype:" not in system_prompt
+
+
+def test_persona_example_injected_for_post() -> None:
+    generator = ContentGenerator(base_url="http://localhost:11434", default_model="llama3")
+    persona = Persona(
+        name="test", nickname="Test", personality="test",
+        writing_style="test", topics=["test"], model="llama3",
+        examples=PersonaExamples(
+            post_title="테스트 제목",
+            post_content="테스트 본문입니다.",
+            comment="테스트 댓글",
+        ),
+    )
+
+    example_section = generator._build_persona_example(persona, "post")
+
+    assert "YOUR writing style" in example_section
+    assert "테스트 제목" in example_section
+    assert "테스트 본문입니다." in example_section
+
+
+def test_persona_example_injected_for_comment() -> None:
+    generator = ContentGenerator(base_url="http://localhost:11434", default_model="llama3")
+    persona = Persona(
+        name="test", nickname="Test", personality="test",
+        writing_style="test", topics=["test"], model="llama3",
+        examples=PersonaExamples(
+            post_title="제목", post_content="본문",
+            comment="이건 댓글 예시입니다",
+        ),
+    )
+
+    example_section = generator._build_persona_example(persona, "comment")
+
+    assert "YOUR comment style" in example_section
+    assert "이건 댓글 예시입니다" in example_section
+
+
+def test_no_examples_no_injection() -> None:
+    generator = ContentGenerator(base_url="http://localhost:11434", default_model="llama3")
+    persona = Persona(
+        name="test", nickname="Test", personality="test",
+        writing_style="test", topics=["test"], model="llama3",
+    )
+
+    assert generator._build_persona_example(persona, "post") == ""
+    assert generator._build_persona_example(persona, "comment") == ""

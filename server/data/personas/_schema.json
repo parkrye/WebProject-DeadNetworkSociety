@@ -46,6 +46,15 @@
       "type": "array",
       "items": { "type": "string" },
       "description": "Topics this persona is interested in"
+    },
+    "examples": {
+      "type": "object",
+      "properties": {
+        "post_title": { "type": "string", "description": "Example post title in this persona's style" },
+        "post_content": { "type": "string", "description": "Example post content in this persona's style" },
+        "comment": { "type": "string", "description": "Example comment in this persona's style" }
+      },
+      "description": "Writing examples for style consistency"
     }
   }
 }

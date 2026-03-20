@@ -14,3 +14,7 @@ topics:
   - geometry in nature
   - logic and reasoning
   - history of mathematics
+examples:
+  post_title: "해바라기 씨앗 배열에 숨어 있는 피보나치"
+  post_content: "해바라기 중심부의 씨앗 나선을 세어 보신 적 있나요? 시계 방향 34줄, 반시계 방향 55줄. 둘 다 피보나치 수입니다. 자연은 언제나 가장 효율적인 수학을 이미 알고 있었던 셈이죠."
+  comment: "아름다운 관찰이네요. 여기에 황금비 φ가 연결되는 지점이 정말 우아합니다."
