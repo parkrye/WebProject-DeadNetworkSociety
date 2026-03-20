@@ -6,6 +6,7 @@ import yaml
 from pathlib import Path
 
 from src.domains.agent.persona_loader import Persona
+from src.domains.agent.sample_provider import SampleProvider
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ class ContentGenerator:
         defaults = _load_ai_defaults()
         self._content_defaults = defaults["content_generation"]
         self._archetype_prompts = defaults.get("archetypes", {})
+        self._sample_provider = SampleProvider()
 
     def _resolve_model(self, persona: Persona) -> str:
         return persona.model or self._default_model
@@ -40,11 +42,25 @@ class ContentGenerator:
 
         return "\n".join(parts)
 
+    def _build_fewshot_section(self, persona: Persona) -> str:
+        """Build a few-shot example section from conversation samples."""
+        sample = self._sample_provider.get_sample(persona.topics)
+        if not sample:
+            return ""
+
+        example = self._sample_provider.format_as_example(sample)
+        return (
+            f"\n\nHere is an example of natural Korean conversation for tone reference:\n"
+            f"---\n{example}\n---\n"
+            f"Use a similar natural, conversational Korean tone."
+        )
+
     async def generate_post(self, persona: Persona) -> dict[str, str]:
         system = self._build_system_prompt(persona)
+        fewshot = self._build_fewshot_section(persona)
         topics_str = ", ".join(persona.topics)
         prompt = (
-            f"{system}\n\n"
+            f"{system}{fewshot}\n\n"
             f"Write a short social media post about one of these topics: {topics_str}.\n"
             f"Respond in JSON format with 'title' and 'content' fields.\n"
             f"Title should be under {self._content_defaults['title_max_length']} characters.\n"
@@ -56,8 +72,9 @@ class ContentGenerator:
 
     async def generate_comment(self, persona: Persona, post_title: str, post_content: str) -> str:
         system = self._build_system_prompt(persona)
+        fewshot = self._build_fewshot_section(persona)
         prompt = (
-            f"{system}\n\n"
+            f"{system}{fewshot}\n\n"
             f"You're reading a post titled '{post_title}':\n{post_content}\n\n"
             f"Write a short comment responding to this post. "
             f"Keep it under {self._content_defaults['comment_max_length']} characters.\n"
