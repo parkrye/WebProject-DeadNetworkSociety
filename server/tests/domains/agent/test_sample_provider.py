@@ -44,7 +44,7 @@ def _create_test_samples(tmp_path: Path) -> Path:
 def test_get_sample_with_matching_topic(tmp_path: Path) -> None:
     # given: samples loaded
     path = _create_test_samples(tmp_path)
-    provider = SampleProvider(samples_path=path)
+    provider = SampleProvider(samples_path=path, community_path=Path("/nonexistent"))
 
     # when: requesting sample for gaming topic
     sample = provider.get_sample(["gaming", "retro gaming"])
@@ -57,7 +57,7 @@ def test_get_sample_with_matching_topic(tmp_path: Path) -> None:
 def test_get_sample_fallback_to_any(tmp_path: Path) -> None:
     # given: samples loaded
     path = _create_test_samples(tmp_path)
-    provider = SampleProvider(samples_path=path)
+    provider = SampleProvider(samples_path=path, community_path=Path("/nonexistent"))
 
     # when: requesting sample for unmapped topic
     sample = provider.get_sample(["quantum_physics"])
@@ -68,7 +68,7 @@ def test_get_sample_fallback_to_any(tmp_path: Path) -> None:
 
 def test_get_sample_no_file() -> None:
     # given: non-existent samples file
-    provider = SampleProvider(samples_path=Path("/nonexistent/samples.json"))
+    provider = SampleProvider(samples_path=Path("/nonexistent/samples.json"), community_path=Path("/nonexistent"))
 
     # when: requesting sample
     sample = provider.get_sample(["anything"])
@@ -80,7 +80,7 @@ def test_get_sample_no_file() -> None:
 def test_format_as_example(tmp_path: Path) -> None:
     # given: a sample
     path = _create_test_samples(tmp_path)
-    provider = SampleProvider(samples_path=path)
+    provider = SampleProvider(samples_path=path, community_path=Path("/nonexistent"))
     sample = provider.get_sample(["food"])
 
     # when: formatting
@@ -138,7 +138,7 @@ def test_retrieve_multiple_samples(tmp_path: Path) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(samples, f, ensure_ascii=False)
 
-    provider = SampleProvider(samples_path=path)
+    provider = SampleProvider(samples_path=path, community_path=Path("/nonexistent"))
     results = provider.retrieve(["gaming"], count=3)
 
     assert len(results) == 3

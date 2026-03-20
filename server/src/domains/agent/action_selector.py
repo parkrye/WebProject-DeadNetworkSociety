@@ -9,7 +9,8 @@ ACTION_REPLY = "reply"
 ACTION_LIKE = "like"
 ACTION_DISLIKE = "dislike"
 
-ALL_ACTIONS = [ACTION_CREATE_POST, ACTION_COMMENT, ACTION_REPLY, ACTION_LIKE, ACTION_DISLIKE]
+ALL_ACTIONS = [ACTION_COMMENT, ACTION_LIKE, ACTION_DISLIKE, ACTION_REPLY, ACTION_CREATE_POST]
+ACTION_WEIGHTS = [35, 20, 20, 15, 10]
 
 
 @dataclass
@@ -24,7 +25,7 @@ def generate_action_set(personas: list[Persona]) -> list[AgentAction]:
 
     for persona in personas:
         for _ in range(persona.activity_level):
-            action_type = random.choice(ALL_ACTIONS)
+            action_type = random.choices(ALL_ACTIONS, weights=ACTION_WEIGHTS, k=1)[0]
             actions.append(AgentAction(persona=persona, action_type=action_type))
 
     random.shuffle(actions)

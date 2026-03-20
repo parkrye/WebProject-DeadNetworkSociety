@@ -6,7 +6,9 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-SAMPLES_PATH = Path(__file__).resolve().parent.parent.parent.parent / "data" / "conversation_samples.json"
+DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data"
+SAMPLES_PATH = DATA_DIR / "conversation_samples.json"
+COMMUNITY_PATH = DATA_DIR / "community_content.json"
 
 RAG_RETRIEVE_COUNT = 3
 
@@ -85,49 +87,93 @@ TOPIC_TO_SAMPLE_KEY: dict[str, list[str]] = {
 
 
 class SampleProvider:
-    def __init__(self, samples_path: Path | None = None) -> None:
+    def __init__(self, samples_path: Path | None = None, community_path: Path | None = None) -> None:
         self._samples: dict[str, list[dict]] = {}
+        self._community: dict[str, list[dict]] = {}
         self._loaded = False
         self._path = samples_path or SAMPLES_PATH
+        self._community_path = community_path or COMMUNITY_PATH
 
     def _ensure_loaded(self) -> None:
         if self._loaded:
             return
-        if not self._path.exists():
-            logger.warning("Conversation samples not found: %s", self._path)
-            self._loaded = True
-            return
-        try:
-            with open(self._path, "r", encoding="utf-8") as f:
-                self._samples = json.load(f)
-            total = sum(len(v) for v in self._samples.values())
-            logger.info("Loaded %d conversation samples across %d topics", total, len(self._samples))
-        except Exception:
-            logger.exception("Failed to load conversation samples")
+
+        # Load conversation samples
+        if self._path.exists():
+            try:
+                with open(self._path, "r", encoding="utf-8") as f:
+                    self._samples = json.load(f)
+                total = sum(len(v) for v in self._samples.values())
+                logger.info("Loaded %d conversation samples across %d topics", total, len(self._samples))
+            except Exception:
+                logger.exception("Failed to load conversation samples")
+
+        # Load community content
+        if self._community_path.exists():
+            try:
+                with open(self._community_path, "r", encoding="utf-8") as f:
+                    self._community = json.load(f)
+                total = sum(len(v) for v in self._community.values())
+                logger.info("Loaded %d community posts across %d topics", total, len(self._community))
+            except Exception:
+                logger.exception("Failed to load community content")
+
         self._loaded = True
 
     def retrieve(self, persona_topics: list[str], count: int = RAG_RETRIEVE_COUNT) -> list[dict]:
-        """RAG retrieval: get multiple relevant samples for a persona's topics."""
+        """RAG retrieval: get relevant samples from conversations + community content."""
         self._ensure_loaded()
-        if not self._samples:
-            return []
 
         candidate_keys: list[str] = []
         for topic in persona_topics:
             topic_lower = topic.lower()
             if topic_lower in TOPIC_TO_SAMPLE_KEY:
                 candidate_keys.extend(TOPIC_TO_SAMPLE_KEY[topic_lower])
+            # Also use Korean topic names directly for community content
+            candidate_keys.append(topic_lower)
 
-        available_keys = [k for k in set(candidate_keys) if k in self._samples]
-        if not available_keys:
-            available_keys = list(self._samples.keys())
-        if not available_keys:
-            return []
+        # Collect from conversation samples
+        conv_keys = [k for k in set(candidate_keys) if k in self._samples]
+        if not conv_keys and self._samples:
+            conv_keys = list(self._samples.keys())
 
-        # Collect candidates from all matching topics
         candidates: list[dict] = []
-        for key in available_keys:
+        for key in conv_keys:
             candidates.extend(self._samples.get(key, []))
+
+        # Collect from community content (Korean topic keys)
+        korean_topic_map = {
+            "일상": ["일상", "인기"],
+            "유머": ["유머"],
+            "게임": ["게임"],
+            "음악": ["음악"],
+            "영화": ["영화"],
+            "여행": ["여행"],
+            "요리": ["요리"],
+            "스포츠": ["스포츠"],
+            "동물": ["동물"],
+            "쇼핑": ["쇼핑"],
+            "뉴스": ["뉴스"],
+            "한국": ["한국"],
+            "드라마": ["드라마"],
+            "언어": ["언어"],
+        }
+        community_keys: set[str] = set()
+        for topic in persona_topics:
+            topic_lower = topic.lower()
+            for kr_key, kr_topics in korean_topic_map.items():
+                if kr_key in topic_lower or topic_lower in kr_key:
+                    community_keys.update(kr_topics)
+        if not community_keys and self._community:
+            community_keys = set(self._community.keys())
+
+        for key in community_keys:
+            for item in self._community.get(key, []):
+                candidates.append({
+                    "single_topic": key,
+                    "utterances": [{"text": item.get("title", "")}, {"text": item.get("content", "")}],
+                    "_source": item.get("source", "community"),
+                })
 
         if not candidates:
             return []
