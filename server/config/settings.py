@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://dns_user:dns_password@localhost:5432/dead_network_society"
 
     ollama_base_url: str = "http://localhost:11434"
-    ollama_default_model: str = "llama3"
+    ollama_default_model: str = "qwen2:1.5b"
 
     agent_scheduler_interval_min: int = 30
     agent_scheduler_interval_max: int = 120

@@ -63,12 +63,27 @@ def _persona_file_path(persona: Persona) -> str:
     return persona.name
 
 
+async def _wait_for_ollama(content_generator: ContentGenerator, max_retries: int = 10) -> None:
+    """Wait until at least one Ollama model is available."""
+    for attempt in range(max_retries):
+        models = await content_generator.check_available_models()
+        if models:
+            logger.info("Ollama ready with models: %s", models)
+            return
+        wait = min(30, 5 * (attempt + 1))
+        logger.warning("Ollama has no models yet (attempt %d/%d), retrying in %ds...", attempt + 1, max_retries, wait)
+        await asyncio.sleep(wait)
+
+    logger.warning("Ollama models not found after %d attempts. Scheduler will start but LLM actions will be skipped.", max_retries)
+
+
 async def start_agent_system(
     session_factory: async_sessionmaker[AsyncSession],
     content_generator: ContentGenerator,
 ) -> asyncio.Task:
     """Register personas and start the scheduler as a background task."""
     await register_all_personas(session_factory)
+    await _wait_for_ollama(content_generator)
 
     task = asyncio.create_task(
         start_all_model_loops(session_factory, content_generator),

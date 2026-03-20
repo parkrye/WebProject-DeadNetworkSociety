@@ -17,7 +17,7 @@ from src.domains.agent.action_selector import (
     AgentAction,
     generate_action_set,
 )
-from src.domains.agent.content_generator import ContentGenerator
+from src.domains.agent.content_generator import ContentGenerator, OllamaUnavailableError
 from src.domains.agent.persona_loader import Persona, load_personas_by_model
 from src.domains.post.repository import PostRepository
 from src.domains.comment.repository import CommentRepository
@@ -108,6 +108,12 @@ async def execute_action_set(
         try:
             async with session_factory() as session:
                 await _execute_action(session, action, content_generator)
+        except OllamaUnavailableError:
+            logger.warning(
+                "Ollama unavailable for %s by %s, skipping remaining LLM actions in set",
+                action.action_type, action.persona.nickname,
+            )
+            break
         except Exception:
             logger.exception(
                 "Action failed: %s by %s",

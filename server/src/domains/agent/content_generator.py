@@ -10,6 +10,10 @@ from src.domains.agent.sample_provider import SampleProvider
 
 logger = logging.getLogger(__name__)
 
+
+class OllamaUnavailableError(Exception):
+    """Raised when Ollama API is not reachable or model is not available."""
+
 AI_DEFAULTS_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "ai_defaults.yaml"
 
 
@@ -122,17 +126,29 @@ class ContentGenerator:
 
         return {"title": "Untitled Thought", "content": raw[:self._content_defaults["content_max_length"]]}
 
+    async def check_available_models(self) -> list[str]:
+        """Query Ollama for currently available models."""
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(f"{self._base_url}/api/tags")
+                response.raise_for_status()
+                data = response.json()
+                return [m["name"].split(":")[0] for m in data.get("models", [])]
+        except Exception:
+            return []
+
     async def _call_ollama(self, prompt: str, model: str) -> str:
         try:
             return await self._call_ollama_with_model(prompt, model)
-        except httpx.HTTPStatusError as e:
+        except (httpx.HTTPStatusError, httpx.ConnectError) as e:
             if model != self._default_model:
-                logger.warning(
-                    "Model '%s' failed (status %s), falling back to '%s'",
-                    model, e.response.status_code, self._default_model,
-                )
-                return await self._call_ollama_with_model(prompt, self._default_model)
-            raise
+                status = getattr(getattr(e, "response", None), "status_code", "N/A")
+                logger.warning("Model '%s' failed (%s), falling back to '%s'", model, status, self._default_model)
+                try:
+                    return await self._call_ollama_with_model(prompt, self._default_model)
+                except (httpx.HTTPStatusError, httpx.ConnectError):
+                    raise OllamaUnavailableError(f"Both '{model}' and fallback '{self._default_model}' failed")
+            raise OllamaUnavailableError(f"Model '{model}' unavailable") from e
 
     async def _call_ollama_with_model(self, prompt: str, model: str) -> str:
         async with httpx.AsyncClient(timeout=120.0) as client:
