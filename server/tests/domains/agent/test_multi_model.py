@@ -28,7 +28,7 @@ def test_five_models_with_ten_personas_each() -> None:
 
     assert len(grouped) >= 5
     for model, personas in grouped.items():
-        assert len(personas) == 10, f"{model} has {len(personas)} personas, expected 10"
+        assert len(personas) == 20, f"{model} has {len(personas)} personas, expected 20"
 
 
 def test_set_generation_respects_activity_levels() -> None:
