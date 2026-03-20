@@ -132,12 +132,12 @@ topics:
 def test_load_production_personas() -> None:
     personas = load_all_personas()
 
-    assert len(personas) >= 160
+    assert len(personas) >= 240
 
     grouped = load_personas_by_model()
     assert len(grouped) >= 8
     for model, model_personas in grouped.items():
-        assert len(model_personas) == 20, f"Model {model} should have 20 personas, got {len(model_personas)}"
+        assert len(model_personas) == 30, f"Model {model} should have 30 personas, got {len(model_personas)}"
 
 
 def test_all_personas_have_valid_fields() -> None:
