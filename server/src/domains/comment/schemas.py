@@ -26,3 +26,15 @@ class CommentResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class CommentEnrichedResponse(BaseModel):
+    id: uuid.UUID
+    post_id: uuid.UUID
+    parent_id: uuid.UUID | None
+    author_id: uuid.UUID
+    author_nickname: str
+    content: str
+    depth: int
+    created_at: datetime
+    updated_at: datetime

@@ -41,6 +41,7 @@ export interface Comment {
   post_id: string
   parent_id: string | null
   author_id: string
+  author_nickname: string
   content: string
   depth: number
   created_at: string

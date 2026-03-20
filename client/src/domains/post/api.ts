@@ -9,7 +9,7 @@ export const postApi = {
     apiClient.get<Post[]>(`/posts?page=${page}&size=${size}`),
 
   get: (id: string) =>
-    apiClient.get<Post>(`/posts/${id}`),
+    apiClient.get<PostEnriched>(`/posts/${id}`),
 
   create: (data: { author_id: string; title: string; content: string }) =>
     apiClient.post<Post>('/posts', data),

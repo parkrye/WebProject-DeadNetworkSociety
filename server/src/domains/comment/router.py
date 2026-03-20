@@ -1,10 +1,13 @@
 import uuid
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domains.comment.schemas import CommentCreate, CommentResponse, CommentUpdate
+from src.domains.comment.models import Comment
+from src.domains.comment.schemas import CommentCreate, CommentEnrichedResponse, CommentResponse, CommentUpdate
 from src.domains.comment.service import CommentService
+from src.domains.user.models import User
 from src.shared.database import get_session
 from src.shared.pagination import PaginationParams
 
@@ -24,15 +27,37 @@ async def create_comment(
     return CommentResponse.model_validate(comment)
 
 
-@router.get("/by-post/{post_id}", response_model=list[CommentResponse])
+@router.get("/by-post/{post_id}", response_model=list[CommentEnrichedResponse])
 async def get_comments_by_post(
     post_id: uuid.UUID,
     page: int = Query(default=1, ge=1),
-    size: int = Query(default=20, ge=1, le=100),
-    service: CommentService = Depends(_get_service),
-) -> list[CommentResponse]:
-    result = await service.get_comments_by_post(post_id, PaginationParams(page=page, size=size))
-    return [CommentResponse.model_validate(c) for c in result.items]
+    size: int = Query(default=50, ge=1, le=200),
+    session: AsyncSession = Depends(get_session),
+) -> list[CommentEnrichedResponse]:
+    offset = (page - 1) * size
+    stmt = (
+        select(Comment, User.nickname.label("author_nickname"))
+        .join(User, Comment.author_id == User.id)
+        .where(Comment.post_id == post_id)
+        .order_by(Comment.created_at.asc())
+        .offset(offset)
+        .limit(size)
+    )
+    result = await session.execute(stmt)
+    return [
+        CommentEnrichedResponse(
+            id=row.Comment.id,
+            post_id=row.Comment.post_id,
+            parent_id=row.Comment.parent_id,
+            author_id=row.Comment.author_id,
+            author_nickname=row.author_nickname,
+            content=row.Comment.content,
+            depth=row.Comment.depth,
+            created_at=row.Comment.created_at,
+            updated_at=row.Comment.updated_at,
+        )
+        for row in result.all()
+    ]
 
 
 @router.get("/{comment_id}", response_model=CommentResponse)
