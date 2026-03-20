@@ -59,6 +59,15 @@ class ReactionRepository:
         result = await self._session.execute(stmt)
         return result.rowcount > 0
 
+    async def get_by_target(self, target_type: str, target_id: uuid.UUID) -> list[Reaction]:
+        stmt = (
+            select(Reaction)
+            .where(Reaction.target_type == target_type, Reaction.target_id == target_id)
+            .order_by(Reaction.created_at.desc())
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
     async def count_by_target(self, target_type: str, target_id: uuid.UUID) -> dict[str, int]:
         stmt = (
             select(Reaction.reaction_type, func.count())

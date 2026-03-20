@@ -140,18 +140,18 @@ class ContentGenerator:
     async def _call_ollama(self, prompt: str, model: str) -> str:
         try:
             return await self._call_ollama_with_model(prompt, model)
-        except (httpx.HTTPStatusError, httpx.ConnectError) as e:
+        except (httpx.HTTPStatusError, httpx.ConnectError, httpx.ReadTimeout) as e:
             if model != self._default_model:
-                status = getattr(getattr(e, "response", None), "status_code", "N/A")
+                status = getattr(getattr(e, "response", None), "status_code", type(e).__name__)
                 logger.warning("Model '%s' failed (%s), falling back to '%s'", model, status, self._default_model)
                 try:
                     return await self._call_ollama_with_model(prompt, self._default_model)
-                except (httpx.HTTPStatusError, httpx.ConnectError):
+                except (httpx.HTTPStatusError, httpx.ConnectError, httpx.ReadTimeout):
                     raise OllamaUnavailableError(f"Both '{model}' and fallback '{self._default_model}' failed")
-            raise OllamaUnavailableError(f"Model '{model}' unavailable") from e
+            raise OllamaUnavailableError(f"Model '{model}' unavailable: {type(e).__name__}") from e
 
     async def _call_ollama_with_model(self, prompt: str, model: str) -> str:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             response = await client.post(
                 f"{self._base_url}/api/generate",
                 json={

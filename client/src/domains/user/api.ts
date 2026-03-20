@@ -8,4 +8,7 @@ export const userApi = {
 
   create: (data: { nickname: string; is_agent?: boolean }) =>
     apiClient.post<User>('/users', data),
+
+  login: (nickname: string) =>
+    apiClient.post<User>('/users/login', { nickname }),
 }

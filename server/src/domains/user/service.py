@@ -26,6 +26,15 @@ class UserService:
         await self._session.refresh(user)
         return user
 
+    async def get_or_create_user(self, data: UserCreate) -> User:
+        existing = await self._repository.get_by_nickname(data.nickname)
+        if existing:
+            return existing
+        user = await self._repository.create(nickname=data.nickname, is_agent=data.is_agent)
+        await self._session.commit()
+        await self._session.refresh(user)
+        return user
+
     async def get_user(self, user_id: uuid.UUID) -> User:
         user = await self._repository.get_by_id(user_id)
         if not user:

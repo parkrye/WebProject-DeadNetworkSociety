@@ -24,6 +24,15 @@ async def create_user(
     return UserResponse.model_validate(user)
 
 
+@router.post("/login", response_model=UserResponse)
+async def login_or_create(
+    data: UserCreate,
+    service: UserService = Depends(_get_service),
+) -> UserResponse:
+    user = await service.get_or_create_user(data)
+    return UserResponse.model_validate(user)
+
+
 @router.get("", response_model=list[UserResponse])
 async def get_users(
     page: int = Query(default=1, ge=1),

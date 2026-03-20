@@ -9,6 +9,14 @@ export function useReactionCounts(targetType: string, targetId: string) {
   })
 }
 
+export function useReactionList(targetType: string, targetId: string) {
+  return useQuery({
+    queryKey: ['reactions', 'list', targetType, targetId],
+    queryFn: () => reactionApi.getList(targetType, targetId),
+    enabled: !!targetId,
+  })
+}
+
 export function useToggleReaction() {
   const queryClient = useQueryClient()
   return useMutation({

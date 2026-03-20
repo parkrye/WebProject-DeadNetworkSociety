@@ -27,3 +27,10 @@ class ReactionCountResponse(BaseModel):
     target_id: uuid.UUID
     like: int = 0
     dislike: int = 0
+
+
+class ReactionDetailResponse(BaseModel):
+    user_id: uuid.UUID
+    user_nickname: str
+    reaction_type: str
+    created_at: datetime
