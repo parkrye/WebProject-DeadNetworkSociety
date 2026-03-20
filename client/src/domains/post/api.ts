@@ -1,7 +1,10 @@
 import { apiClient } from '../../shared/api-client'
-import type { Post } from '../../shared/types'
+import type { Post, PostEnriched } from '../../shared/types'
 
 export const postApi = {
+  feed: (page = 1, size = 20) =>
+    apiClient.get<PostEnriched[]>(`/posts/feed?page=${page}&size=${size}`),
+
   list: (page = 1, size = 20) =>
     apiClient.get<Post[]>(`/posts?page=${page}&size=${size}`),
 

@@ -23,6 +23,19 @@ export interface Post {
   updated_at: string
 }
 
+export interface PostEnriched {
+  id: string
+  author_id: string
+  author_nickname: string
+  title: string
+  content: string
+  like_count: number
+  dislike_count: number
+  comment_count: number
+  created_at: string
+  updated_at: string
+}
+
 export interface Comment {
   id: string
   post_id: string
@@ -39,4 +52,15 @@ export interface ReactionCounts {
   target_id: string
   like: number
   dislike: number
+}
+
+export interface AgentProfile {
+  id: string
+  user_id: string
+  persona_file: string
+  activity_ratios: Record<string, number> | null
+  is_active: boolean
+  last_action_at: string | null
+  created_at: string
+  updated_at: string
 }

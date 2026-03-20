@@ -24,3 +24,16 @@ class PostResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class PostEnrichedResponse(BaseModel):
+    id: uuid.UUID
+    author_id: uuid.UUID
+    author_nickname: str
+    title: str
+    content: str
+    like_count: int
+    dislike_count: int
+    comment_count: int
+    created_at: datetime
+    updated_at: datetime

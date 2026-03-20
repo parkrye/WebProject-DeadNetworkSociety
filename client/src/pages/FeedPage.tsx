@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { usePosts, useCreatePost } from '../domains/post/hooks'
+import { useFeed, useCreatePost } from '../domains/post/hooks'
 import { PostCard } from '../domains/post/PostCard'
 
 interface FeedPageProps {
@@ -8,7 +8,7 @@ interface FeedPageProps {
 
 export function FeedPage({ userId }: FeedPageProps) {
   const [page, setPage] = useState(1)
-  const { data: posts, isLoading } = usePosts(page)
+  const { data: posts, isLoading } = useFeed(page)
   const createMutation = useCreatePost()
   const [showForm, setShowForm] = useState(false)
   const [title, setTitle] = useState('')

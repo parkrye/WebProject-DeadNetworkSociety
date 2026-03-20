@@ -2,6 +2,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { postApi } from './api'
 
 const POSTS_KEY = ['posts']
+const FEED_KEY = ['feed']
+
+export function useFeed(page = 1) {
+  return useQuery({
+    queryKey: [...FEED_KEY, page],
+    queryFn: () => postApi.feed(page),
+    refetchInterval: 15000,
+  })
+}
 
 export function usePosts(page = 1) {
   return useQuery({
@@ -24,6 +33,7 @@ export function useCreatePost() {
     mutationFn: postApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: POSTS_KEY })
+      queryClient.invalidateQueries({ queryKey: FEED_KEY })
     },
   })
 }

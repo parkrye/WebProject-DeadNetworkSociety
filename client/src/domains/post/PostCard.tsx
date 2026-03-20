@@ -1,13 +1,12 @@
 import { Link } from 'react-router-dom'
-import type { Post } from '../../shared/types'
-import { ReactionButtons } from '../reaction/ReactionButtons'
+import type { PostEnriched } from '../../shared/types'
 
 interface PostCardProps {
-  post: Post
+  post: PostEnriched
   userId: string | null
 }
 
-export function PostCard({ post, userId }: PostCardProps) {
+export function PostCard({ post }: PostCardProps) {
   const timeAgo = formatTimeAgo(post.created_at)
 
   return (
@@ -17,8 +16,21 @@ export function PostCard({ post, userId }: PostCardProps) {
         <p className="text-gray-400 text-sm line-clamp-3 mb-3">{post.content}</p>
       </Link>
       <div className="flex items-center justify-between text-xs text-gray-500">
-        <span>{timeAgo}</span>
-        <ReactionButtons targetType="post" targetId={post.id} userId={userId} />
+        <div className="flex items-center gap-3">
+          <span className="text-gray-400 font-medium">{post.author_nickname}</span>
+          <span>{timeAgo}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1" title="Comments">
+            <span>💬</span> {post.comment_count}
+          </span>
+          <span className="flex items-center gap-1 text-green-500" title="Likes">
+            <span>+</span>{post.like_count}
+          </span>
+          <span className="flex items-center gap-1 text-red-500" title="Dislikes">
+            <span>-</span>{post.dislike_count}
+          </span>
+        </div>
       </div>
     </article>
   )
