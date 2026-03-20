@@ -36,7 +36,7 @@ async def login_or_create(
 @router.get("", response_model=list[UserResponse])
 async def get_users(
     page: int = Query(default=1, ge=1),
-    size: int = Query(default=20, ge=1, le=100),
+    size: int = Query(default=20, ge=1, le=500),
     service: UserService = Depends(_get_service),
 ) -> list[UserResponse]:
     result = await service.get_users(PaginationParams(page=page, size=size))

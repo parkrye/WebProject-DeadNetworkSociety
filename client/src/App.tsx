@@ -19,9 +19,16 @@ function App() {
     if (saved) {
       try {
         const { id, nickname: name } = JSON.parse(saved)
-        setUserId(id)
-        setNickname(name)
-        setIsAnon(name === ANON_NICKNAME)
+        // Verify saved user still exists in DB by re-logging in
+        userApi.login(name).then((user) => {
+          setUserId(user.id)
+          setNickname(user.nickname)
+          setIsAnon(user.nickname === ANON_NICKNAME)
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: user.id, nickname: user.nickname }))
+        }).catch(() => {
+          localStorage.removeItem(STORAGE_KEY)
+          initAnonymousUser()
+        })
         return
       } catch { /* ignore */ }
     }

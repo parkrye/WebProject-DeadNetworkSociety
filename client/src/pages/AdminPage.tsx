@@ -25,7 +25,7 @@ function useAgentStatuses() {
 function useAllUsers() {
   return useQuery({
     queryKey: ['users', 'agents'],
-    queryFn: () => apiClient.get<User[]>('/users?size=100'),
+    queryFn: () => apiClient.get<User[]>('/users?size=300'),
   })
 }
 
