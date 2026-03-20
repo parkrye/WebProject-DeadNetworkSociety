@@ -62,6 +62,7 @@ def test_archetype_prompt_injected_in_system_prompt() -> None:
         name="test", nickname="Test", personality="test personality",
         writing_style="test style", topics=["test"],
         model="llama3", archetype="expert",
+        archetype_detail="요리 전문가. 식재료의 과학에 정통하다.",
     )
 
     system_prompt = generator._build_system_prompt(persona)
@@ -69,7 +70,8 @@ def test_archetype_prompt_injected_in_system_prompt() -> None:
     assert "test personality" in system_prompt
     assert "test style" in system_prompt
     assert "Behavioral archetype:" in system_prompt
-    assert "expert" in system_prompt.lower()
+    assert "Archetype specification:" in system_prompt
+    assert "요리 전문가" in system_prompt
 
 
 def test_no_archetype_no_injection() -> None:

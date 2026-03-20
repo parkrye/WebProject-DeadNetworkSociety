@@ -39,6 +39,8 @@ class ContentGenerator:
             archetype_prompt = archetype_data.get("prompt", "")
             if archetype_prompt:
                 parts.append(f"Behavioral archetype: {archetype_prompt}")
+            if persona.archetype_detail:
+                parts.append(f"Archetype specification: {persona.archetype_detail}")
 
         return "\n".join(parts)
 

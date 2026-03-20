@@ -34,6 +34,7 @@ class Persona:
     writing_style: str
     topics: list[str]
     archetype: str = ""
+    archetype_detail: str = ""
     model: str = ""
     activity_level: int = DEFAULT_ACTIVITY_LEVEL
     recent_scope: int = DEFAULT_RECENT_SCOPE
@@ -65,6 +66,7 @@ def load_persona(file_path: Path) -> Persona:
         writing_style=data["writing_style"],
         topics=data["topics"],
         archetype=archetype,
+        archetype_detail=data.get("archetype_detail", ""),
         model=data.get("model", ""),
         activity_level=activity_level,
         recent_scope=data.get("recent_scope", DEFAULT_RECENT_SCOPE),

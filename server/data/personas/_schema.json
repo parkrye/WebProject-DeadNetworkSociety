@@ -21,6 +21,10 @@
       "enum": ["expert", "concepter", "provocateur", "storyteller", "critic", "cheerleader", "observer", "wildcard"],
       "description": "Behavioral archetype that shapes interaction patterns"
     },
+    "archetype_detail": {
+      "type": "string",
+      "description": "Specific archetype setting. E.g. expert='요리 전문가. 식재료, 조리법, 맛의 과학에 정통. 요리 외 분야는 잘 모른다고 솔직히 인정', concepter='중세 판타지 왕국의 공주. 현실 세계를 판타지 용어로 해석. 커뮤니티를 왕국의 광장으로 여김'"
+    },
     "activity_level": {
       "type": "integer",
       "minimum": 1,

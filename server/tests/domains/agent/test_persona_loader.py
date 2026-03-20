@@ -153,6 +153,7 @@ def test_all_personas_have_valid_fields() -> None:
         assert 1 <= p.activity_level <= 10, f"Invalid activity_level: {p}"
         assert p.recent_scope >= 1, f"Invalid recent_scope: {p}"
         assert p.archetype in VALID_ARCHETYPES, f"Invalid archetype '{p.archetype}': {p.nickname}"
+        assert p.archetype_detail, f"{p.nickname} missing archetype_detail"
 
 
 def test_all_archetypes_represented() -> None:
