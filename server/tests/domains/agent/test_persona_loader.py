@@ -1,48 +1,35 @@
 from pathlib import Path
 
-import pytest
-
-from src.domains.agent.persona_loader import load_all_personas, load_persona
-
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
+from src.domains.agent.persona_loader import load_all_personas, load_persona, load_personas_by_model
 
 
-@pytest.fixture
-def sample_persona_file(tmp_path: Path) -> Path:
+def test_load_persona_with_all_fields(tmp_path: Path) -> None:
     content = """
 name: test_bot
 nickname: TestBot
+model: llama3
+activity_level: 7
+recent_scope: 15
 personality: A test persona
 writing_style: Simple and direct
 topics:
   - testing
   - automation
-activity_ratios:
-  create_post: 0.5
-  comment: 0.3
-  reaction: 0.2
 """
     file_path = tmp_path / "test_bot.yaml"
     file_path.write_text(content, encoding="utf-8")
-    return file_path
 
+    persona = load_persona(file_path)
 
-def test_load_persona(sample_persona_file: Path) -> None:
-    # given: a valid persona YAML file
-
-    # when: loading the persona
-    persona = load_persona(sample_persona_file)
-
-    # then: all fields are parsed correctly
     assert persona.name == "test_bot"
     assert persona.nickname == "TestBot"
-    assert "test persona" in persona.personality
+    assert persona.model == "llama3"
+    assert persona.activity_level == 7
+    assert persona.recent_scope == 15
     assert persona.topics == ["testing", "automation"]
-    assert persona.activity_ratios["create_post"] == 0.5
 
 
-def test_load_persona_without_activity_ratios(tmp_path: Path) -> None:
-    # given: a persona without activity_ratios
+def test_load_persona_defaults(tmp_path: Path) -> None:
     content = """
 name: minimal
 nickname: Minimal
@@ -54,117 +41,105 @@ topics:
     file_path = tmp_path / "minimal.yaml"
     file_path.write_text(content, encoding="utf-8")
 
-    # when: loading the persona
     persona = load_persona(file_path)
 
-    # then: activity_ratios defaults to empty dict
-    assert persona.activity_ratios == {}
+    assert persona.model == ""
+    assert persona.activity_level == 5
+    assert persona.recent_scope == 10
 
 
-def test_load_all_personas(tmp_path: Path) -> None:
-    # given: multiple persona files
+def test_load_persona_clamps_activity_level(tmp_path: Path) -> None:
+    content = """
+name: extreme
+nickname: Extreme
+model: llama3
+activity_level: 99
+personality: Over the top
+writing_style: Loud
+topics:
+  - chaos
+"""
+    file_path = tmp_path / "extreme.yaml"
+    file_path.write_text(content, encoding="utf-8")
+
+    persona = load_persona(file_path)
+
+    assert persona.activity_level == 10
+
+
+def test_load_all_personas_recursive(tmp_path: Path) -> None:
+    (tmp_path / "model_a").mkdir()
+    (tmp_path / "model_b").mkdir()
     for i in range(3):
         content = f"""
 name: bot_{i}
 nickname: Bot{i}
-personality: Bot {i} persona
+model: model_a
+personality: Bot {i}
 writing_style: Style {i}
 topics:
   - topic_{i}
 """
-        (tmp_path / f"bot_{i}.yaml").write_text(content, encoding="utf-8")
+        (tmp_path / "model_a" / f"bot_{i}.yaml").write_text(content, encoding="utf-8")
 
-    # when: loading all personas
+    content = """
+name: other
+nickname: Other
+model: model_b
+personality: Other bot
+writing_style: Other style
+topics:
+  - other
+"""
+    (tmp_path / "model_b" / "other.yaml").write_text(content, encoding="utf-8")
+
     personas = load_all_personas(tmp_path)
 
-    # then: all personas are loaded
-    assert len(personas) == 3
+    assert len(personas) == 4
 
 
-def test_load_all_personas_empty_dir(tmp_path: Path) -> None:
-    # given: an empty directory
+def test_load_personas_by_model(tmp_path: Path) -> None:
+    for model in ["llama3", "gemma2"]:
+        (tmp_path / model).mkdir()
+        for i in range(2):
+            content = f"""
+name: {model}_bot_{i}
+nickname: {model.title()}Bot{i}
+model: {model}
+personality: A {model} bot
+writing_style: Standard
+topics:
+  - test
+"""
+            (tmp_path / model / f"bot_{i}.yaml").write_text(content, encoding="utf-8")
 
-    # when: loading personas
-    personas = load_all_personas(tmp_path)
+    grouped = load_personas_by_model(tmp_path)
 
-    # then: returns empty list
-    assert personas == []
-
-
-def test_load_all_personas_nonexistent_dir() -> None:
-    # given: a non-existent directory
-
-    # when: loading personas
-    personas = load_all_personas(Path("/nonexistent/path"))
-
-    # then: returns empty list
-    assert personas == []
+    assert len(grouped) == 2
+    assert len(grouped["llama3"]) == 2
+    assert len(grouped["gemma2"]) == 2
 
 
 def test_load_production_personas() -> None:
-    # given: the actual personas directory
-
-    # when: loading all production personas
     personas = load_all_personas()
 
-    # then: at least 5 personas exist and are valid
-    assert len(personas) >= 5
-    for persona in personas:
-        assert persona.name
-        assert persona.nickname
-        assert persona.personality
-        assert persona.writing_style
-        assert len(persona.topics) > 0
+    assert len(personas) >= 50
+
+    grouped = load_personas_by_model()
+    assert len(grouped) >= 5
+    for model, model_personas in grouped.items():
+        assert len(model_personas) == 10, f"Model {model} should have 10 personas, got {len(model_personas)}"
 
 
-def test_each_persona_has_unique_model() -> None:
-    # given: all production personas
-
-    # when: loading them
+def test_all_personas_have_valid_fields() -> None:
     personas = load_all_personas()
 
-    # then: each persona specifies a model and models are diverse
-    models = [p.model for p in personas]
-    assert all(m for m in models), "All personas should specify a model"
-    assert len(set(models)) >= 3, "At least 3 different models should be used"
-
-
-def test_load_persona_with_model(tmp_path: Path) -> None:
-    # given: a persona with a model field
-    content = """
-name: model_bot
-nickname: ModelBot
-model: gemma2
-personality: A bot with a model
-writing_style: Direct
-topics:
-  - testing
-"""
-    file_path = tmp_path / "model_bot.yaml"
-    file_path.write_text(content, encoding="utf-8")
-
-    # when: loading the persona
-    persona = load_persona(file_path)
-
-    # then: model is parsed
-    assert persona.model == "gemma2"
-
-
-def test_load_persona_without_model_defaults_empty(tmp_path: Path) -> None:
-    # given: a persona without model field
-    content = """
-name: no_model
-nickname: NoModel
-personality: No model specified
-writing_style: Default
-topics:
-  - general
-"""
-    file_path = tmp_path / "no_model.yaml"
-    file_path.write_text(content, encoding="utf-8")
-
-    # when: loading the persona
-    persona = load_persona(file_path)
-
-    # then: model defaults to empty string
-    assert persona.model == ""
+    for p in personas:
+        assert p.name, f"Missing name: {p}"
+        assert p.nickname, f"Missing nickname: {p}"
+        assert p.model, f"Missing model: {p}"
+        assert p.personality, f"Missing personality: {p}"
+        assert p.writing_style, f"Missing writing_style: {p}"
+        assert len(p.topics) > 0, f"No topics: {p}"
+        assert 1 <= p.activity_level <= 10, f"Invalid activity_level: {p}"
+        assert p.recent_scope >= 1, f"Invalid recent_scope: {p}"

@@ -8,6 +8,11 @@ logger = logging.getLogger(__name__)
 
 PERSONAS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data" / "personas"
 
+MIN_ACTIVITY_LEVEL = 1
+MAX_ACTIVITY_LEVEL = 10
+DEFAULT_ACTIVITY_LEVEL = 5
+DEFAULT_RECENT_SCOPE = 10
+
 
 @dataclass(frozen=True)
 class Persona:
@@ -17,12 +22,16 @@ class Persona:
     writing_style: str
     topics: list[str]
     model: str = ""
-    activity_ratios: dict[str, float] = field(default_factory=dict)
+    activity_level: int = DEFAULT_ACTIVITY_LEVEL
+    recent_scope: int = DEFAULT_RECENT_SCOPE
 
 
 def load_persona(file_path: Path) -> Persona:
     with open(file_path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
+
+    activity_level = data.get("activity_level", DEFAULT_ACTIVITY_LEVEL)
+    activity_level = max(MIN_ACTIVITY_LEVEL, min(MAX_ACTIVITY_LEVEL, activity_level))
 
     return Persona(
         name=data["name"],
@@ -31,7 +40,8 @@ def load_persona(file_path: Path) -> Persona:
         writing_style=data["writing_style"],
         topics=data["topics"],
         model=data.get("model", ""),
-        activity_ratios=data.get("activity_ratios", {}),
+        activity_level=activity_level,
+        recent_scope=data.get("recent_scope", DEFAULT_RECENT_SCOPE),
     )
 
 
@@ -43,10 +53,21 @@ def load_all_personas(directory: Path | None = None) -> list[Persona]:
         logger.warning("Personas directory not found: %s", target_dir)
         return personas
 
-    for file_path in sorted(target_dir.glob("*.yaml")):
+    for file_path in sorted(target_dir.rglob("*.yaml")):
         try:
             personas.append(load_persona(file_path))
         except Exception:
             logger.exception("Failed to load persona from %s", file_path)
 
     return personas
+
+
+def load_personas_by_model(directory: Path | None = None) -> dict[str, list[Persona]]:
+    personas = load_all_personas(directory)
+    grouped: dict[str, list[Persona]] = {}
+    for persona in personas:
+        model = persona.model
+        if model not in grouped:
+            grouped[model] = []
+        grouped[model].append(persona)
+    return grouped

@@ -13,13 +13,13 @@ async def test_create_agent_profile(client: AsyncClient) -> None:
     user_id = await _create_agent_user(client)
 
     # when: creating an agent profile
-    response = await client.post(f"/api/agents/{user_id}", json={"persona_file": "nihilist_nyx"})
+    response = await client.post(f"/api/agents/{user_id}", json={"persona_file": "llama3/nihilist_nyx"})
 
     # then: profile is created
     assert response.status_code == 201
     data = response.json()
     assert data["user_id"] == user_id
-    assert data["persona_file"] == "nihilist_nyx"
+    assert data["persona_file"] == "llama3/nihilist_nyx"
     assert data["is_active"] is True
 
 
@@ -27,10 +27,10 @@ async def test_create_agent_profile(client: AsyncClient) -> None:
 async def test_create_duplicate_agent_profile(client: AsyncClient) -> None:
     # given: an agent with existing profile
     user_id = await _create_agent_user(client)
-    await client.post(f"/api/agents/{user_id}", json={"persona_file": "nihilist_nyx"})
+    await client.post(f"/api/agents/{user_id}", json={"persona_file": "llama3/nihilist_nyx"})
 
     # when: creating another profile for same user
-    response = await client.post(f"/api/agents/{user_id}", json={"persona_file": "retro_rick"})
+    response = await client.post(f"/api/agents/{user_id}", json={"persona_file": "gemma2/retro_rick"})
 
     # then: conflict
     assert response.status_code == 409
@@ -40,7 +40,7 @@ async def test_create_duplicate_agent_profile(client: AsyncClient) -> None:
 async def test_get_agent_profile(client: AsyncClient) -> None:
     # given: an agent profile
     user_id = await _create_agent_user(client)
-    create_resp = await client.post(f"/api/agents/{user_id}", json={"persona_file": "retro_rick"})
+    create_resp = await client.post(f"/api/agents/{user_id}", json={"persona_file": "gemma2/retro_rick"})
     profile_id = create_resp.json()["id"]
 
     # when: fetching the profile
@@ -48,7 +48,7 @@ async def test_get_agent_profile(client: AsyncClient) -> None:
 
     # then: returns the profile
     assert response.status_code == 200
-    assert response.json()["persona_file"] == "retro_rick"
+    assert response.json()["persona_file"] == "gemma2/retro_rick"
 
 
 @pytest.mark.asyncio
@@ -56,7 +56,7 @@ async def test_get_active_agents(client: AsyncClient) -> None:
     # given: multiple agents
     for i in range(3):
         uid = await _create_agent_user(client, f"bot_{i}")
-        await client.post(f"/api/agents/{uid}", json={"persona_file": "nihilist_nyx"})
+        await client.post(f"/api/agents/{uid}", json={"persona_file": f"llama3/bot_{i}"})
 
     # when: fetching active agents
     response = await client.get("/api/agents/active")
@@ -70,7 +70,7 @@ async def test_get_active_agents(client: AsyncClient) -> None:
 async def test_update_agent_profile(client: AsyncClient) -> None:
     # given: an active agent
     user_id = await _create_agent_user(client)
-    create_resp = await client.post(f"/api/agents/{user_id}", json={"persona_file": "nihilist_nyx"})
+    create_resp = await client.post(f"/api/agents/{user_id}", json={"persona_file": "llama3/nihilist_nyx"})
     profile_id = create_resp.json()["id"]
 
     # when: deactivating the agent

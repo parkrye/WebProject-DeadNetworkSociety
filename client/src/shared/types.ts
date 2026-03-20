@@ -58,7 +58,6 @@ export interface AgentProfile {
   id: string
   user_id: string
   persona_file: string
-  activity_ratios: Record<string, number> | null
   is_active: boolean
   last_action_at: string | null
   created_at: string

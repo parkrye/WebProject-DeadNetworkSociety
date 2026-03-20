@@ -1,34 +1,31 @@
 import random
+from dataclasses import dataclass
 
-import yaml
-from pathlib import Path
-
-AI_DEFAULTS_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "ai_defaults.yaml"
+from src.domains.agent.persona_loader import Persona
 
 ACTION_CREATE_POST = "create_post"
 ACTION_COMMENT = "comment"
-ACTION_REACTION = "reaction"
+ACTION_REPLY = "reply"
+ACTION_LIKE = "like"
+ACTION_DISLIKE = "dislike"
 
-ALL_ACTIONS = [ACTION_CREATE_POST, ACTION_COMMENT, ACTION_REACTION]
-
-
-def _load_default_ratios() -> dict[str, float]:
-    with open(AI_DEFAULTS_PATH, encoding="utf-8") as f:
-        defaults = yaml.safe_load(f)
-    return defaults["activity_ratios"]
+ALL_ACTIONS = [ACTION_CREATE_POST, ACTION_COMMENT, ACTION_REPLY, ACTION_LIKE, ACTION_DISLIKE]
 
 
-def select_action(activity_ratios: dict[str, float] | None = None) -> str:
-    ratios = activity_ratios or _load_default_ratios()
+@dataclass
+class AgentAction:
+    persona: Persona
+    action_type: str
 
-    actions = []
-    weights = []
-    for action in ALL_ACTIONS:
-        if action in ratios and ratios[action] > 0:
-            actions.append(action)
-            weights.append(ratios[action])
 
-    if not actions:
-        return ACTION_CREATE_POST
+def generate_action_set(personas: list[Persona]) -> list[AgentAction]:
+    """Generate a shuffled set of actions for all personas based on their activity_level."""
+    actions: list[AgentAction] = []
 
-    return random.choices(actions, weights=weights, k=1)[0]
+    for persona in personas:
+        for _ in range(persona.activity_level):
+            action_type = random.choice(ALL_ACTIONS)
+            actions.append(AgentAction(persona=persona, action_type=action_type))
+
+    random.shuffle(actions)
+    return actions

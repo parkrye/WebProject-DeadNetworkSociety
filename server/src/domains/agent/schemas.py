@@ -11,14 +11,12 @@ class AgentProfileCreate(BaseModel):
 
 class AgentProfileUpdate(BaseModel):
     is_active: bool | None = None
-    activity_ratios: dict[str, float] | None = None
 
 
 class AgentProfileResponse(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
     persona_file: str
-    activity_ratios: dict | None
     is_active: bool
     last_action_at: datetime | None
     created_at: datetime

@@ -15,13 +15,11 @@ class AgentRepository:
         self,
         user_id: uuid.UUID,
         persona_file: str,
-        activity_ratios: dict | None = None,
         is_active: bool = True,
     ) -> AgentProfile:
         profile = AgentProfile(
             user_id=user_id,
             persona_file=persona_file,
-            activity_ratios=activity_ratios,
             is_active=is_active,
         )
         self._session.add(profile)
@@ -45,13 +43,10 @@ class AgentRepository:
         self,
         profile: AgentProfile,
         is_active: bool | None = None,
-        activity_ratios: dict[str, float] | None = None,
         last_action_at: datetime | None = None,
     ) -> AgentProfile:
         if is_active is not None:
             profile.is_active = is_active
-        if activity_ratios is not None:
-            profile.activity_ratios = activity_ratios
         if last_action_at is not None:
             profile.last_action_at = last_action_at
         await self._session.flush()

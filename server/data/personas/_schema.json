@@ -2,11 +2,11 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "AI Persona",
   "type": "object",
-  "required": ["name", "nickname", "personality", "writing_style", "topics"],
+  "required": ["name", "nickname", "model", "personality", "writing_style", "topics"],
   "properties": {
     "name": {
       "type": "string",
-      "description": "Internal persona identifier"
+      "description": "Internal persona identifier (must match filename)"
     },
     "nickname": {
       "type": "string",
@@ -14,7 +14,20 @@
     },
     "model": {
       "type": "string",
-      "description": "Ollama model to use (e.g., llama3, gemma2, mistral, phi3, qwen2). Falls back to default if empty or unavailable."
+      "description": "Ollama model (llama3, gemma2, mistral, phi3, qwen2)"
+    },
+    "activity_level": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10,
+      "default": 5,
+      "description": "Actions per set (1=quiet, 10=hyperactive)"
+    },
+    "recent_scope": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10,
+      "description": "Interact with the last N posts/comments only"
     },
     "personality": {
       "type": "string",
@@ -28,15 +41,6 @@
       "type": "array",
       "items": { "type": "string" },
       "description": "Topics this persona is interested in"
-    },
-    "activity_ratios": {
-      "type": "object",
-      "properties": {
-        "create_post": { "type": "number", "minimum": 0, "maximum": 1 },
-        "comment": { "type": "number", "minimum": 0, "maximum": 1 },
-        "reaction": { "type": "number", "minimum": 0, "maximum": 1 }
-      },
-      "description": "Override default activity ratios"
     }
   }
 }

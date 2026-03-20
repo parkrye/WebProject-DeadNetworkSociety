@@ -1,21 +1,28 @@
 import asyncio
 import logging
 import random
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 
 import yaml
 from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.domains.agent.action_selector import ACTION_COMMENT, ACTION_CREATE_POST, ACTION_REACTION, select_action
+from src.domains.agent.action_selector import (
+    ACTION_COMMENT,
+    ACTION_CREATE_POST,
+    ACTION_DISLIKE,
+    ACTION_LIKE,
+    ACTION_REPLY,
+    AgentAction,
+    generate_action_set,
+)
 from src.domains.agent.content_generator import ContentGenerator
-from src.domains.agent.models import AgentProfile
-from src.domains.agent.persona_loader import Persona, load_persona, PERSONAS_DIR
-from src.domains.agent.repository import AgentRepository
+from src.domains.agent.persona_loader import Persona, load_personas_by_model
 from src.domains.post.repository import PostRepository
 from src.domains.comment.repository import CommentRepository
 from src.domains.reaction.repository import ReactionRepository
+from src.domains.user.repository import UserRepository
 from src.shared.event_bus import event_bus
 from src.shared.events import PostCreated, CommentCreated, ReactionCreated
 from src.shared.pagination import PaginationParams
@@ -30,159 +37,140 @@ def _load_scheduler_defaults() -> dict:
         return yaml.safe_load(f)["scheduler"]
 
 
-async def execute_all_agents_parallel(
+async def start_all_model_loops(
     session_factory: async_sessionmaker[AsyncSession],
     content_generator: ContentGenerator,
 ) -> None:
-    """Trigger all eligible agents to act in parallel, each with its own DB session."""
-    defaults = _load_scheduler_defaults()
-    cooldown = defaults["cooldown_seconds"]
-    max_concurrent = defaults.get("max_concurrent_agents", 5)
+    """Start parallel model loops. Each model runs its own set-based execution loop."""
+    grouped = load_personas_by_model()
 
-    async with session_factory() as session:
-        agent_repo = AgentRepository(session)
-        active_agents = await agent_repo.get_active_agents()
-
-    if not active_agents:
-        logger.debug("No active agents found")
+    if not grouped:
+        logger.warning("No personas found")
         return
-
-    eligible = _filter_by_cooldown(active_agents, cooldown)
-    if not eligible:
-        logger.debug("All agents on cooldown")
-        return
-
-    selected = eligible[:max_concurrent]
-    logger.info("Executing %d agents in parallel: %s", len(selected), [a.persona_file for a in selected])
 
     tasks = [
-        _execute_single_agent(session_factory, content_generator, agent)
-        for agent in selected
+        model_loop(model, personas, session_factory, content_generator)
+        for model, personas in grouped.items()
     ]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    for agent, result in zip(selected, results):
-        if isinstance(result, Exception):
-            logger.error("Agent %s failed: %s", agent.persona_file, result)
+    logger.info(
+        "Starting %d model loops: %s",
+        len(tasks),
+        {model: len(personas) for model, personas in grouped.items()},
+    )
 
-
-async def execute_agent_action(
-    session: AsyncSession,
-    content_generator: ContentGenerator,
-) -> None:
-    """Legacy single-agent execution (for backwards compatibility)."""
-    agent_repo = AgentRepository(session)
-    active_agents = await agent_repo.get_active_agents()
-
-    if not active_agents:
-        return
-
-    defaults = _load_scheduler_defaults()
-    eligible = _filter_by_cooldown(active_agents, defaults["cooldown_seconds"])
-    if not eligible:
-        return
-
-    agent = random.choice(eligible)
-    await _run_agent_action(session, content_generator, agent)
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
-async def _execute_single_agent(
+async def model_loop(
+    model: str,
+    personas: list[Persona],
     session_factory: async_sessionmaker[AsyncSession],
     content_generator: ContentGenerator,
-    agent: AgentProfile,
 ) -> None:
-    """Execute a single agent's action with its own isolated session."""
-    async with session_factory() as session:
+    """Run continuous set-based execution for a single model."""
+    defaults = _load_scheduler_defaults()
+    interval_min = defaults["interval_min_seconds"]
+    interval_max = defaults["interval_max_seconds"]
+
+    logger.info(
+        "Model loop started: %s with %d personas (total actions/set: %d)",
+        model,
+        len(personas),
+        sum(p.activity_level for p in personas),
+    )
+
+    while True:
         try:
-            await _run_agent_action(session, content_generator, agent)
+            action_set = generate_action_set(personas)
+            logger.info("Model %s: executing set of %d actions", model, len(action_set))
+
+            await execute_action_set(action_set, session_factory, content_generator)
+
+            delay = random.randint(interval_min, interval_max)
+            logger.info("Model %s: set complete, waiting %ds before next set", model, delay)
+            await asyncio.sleep(delay)
+        except asyncio.CancelledError:
+            logger.info("Model loop %s cancelled", model)
+            break
         except Exception:
-            logger.exception("Agent action failed for %s", agent.persona_file)
-            await session.rollback()
+            logger.exception("Model loop %s error, retrying after cooldown", model)
+            await asyncio.sleep(interval_max)
 
 
-async def _run_agent_action(
-    session: AsyncSession,
+async def execute_action_set(
+    action_set: list[AgentAction],
+    session_factory: async_sessionmaker[AsyncSession],
     content_generator: ContentGenerator,
-    agent: AgentProfile,
 ) -> None:
-    persona_path = PERSONAS_DIR / f"{agent.persona_file}.yaml"
-    if not persona_path.exists():
-        logger.warning("Persona file not found: %s", agent.persona_file)
+    """Execute a shuffled set of actions sequentially (one model at a time)."""
+    for action in action_set:
+        try:
+            async with session_factory() as session:
+                await _execute_action(session, action, content_generator)
+        except Exception:
+            logger.exception(
+                "Action failed: %s by %s",
+                action.action_type, action.persona.nickname,
+            )
+
+
+async def _execute_action(
+    session: AsyncSession,
+    action: AgentAction,
+    content_generator: ContentGenerator,
+) -> None:
+    persona = action.persona
+
+    user_repo = UserRepository(session)
+    user = await user_repo.get_by_nickname(persona.nickname)
+    if not user:
+        logger.warning("User not found for persona %s, skipping", persona.nickname)
         return
 
-    persona = load_persona(persona_path)
-    ratios = agent.activity_ratios or dict(zip(
-        ["create_post", "comment", "reaction"],
-        [
-            persona.activity_ratios.get("create_post", 0.3),
-            persona.activity_ratios.get("comment", 0.4),
-            persona.activity_ratios.get("reaction", 0.3),
-        ],
-    ))
+    if action.action_type == ACTION_CREATE_POST:
+        await _do_create_post(session, user.id, persona, content_generator)
+    elif action.action_type == ACTION_COMMENT:
+        await _do_comment(session, user.id, persona, content_generator)
+    elif action.action_type == ACTION_REPLY:
+        await _do_reply(session, user.id, persona, content_generator)
+    elif action.action_type == ACTION_LIKE:
+        await _do_reaction(session, user.id, persona, "like")
+    elif action.action_type == ACTION_DISLIKE:
+        await _do_reaction(session, user.id, persona, "dislike")
 
-    action = select_action(ratios)
-    model = persona.model or content_generator._default_model
-    logger.info("Agent %s (model=%s) selected action: %s", persona.nickname, model, action)
-
-    if action == ACTION_CREATE_POST:
-        await _do_create_post(session, agent, persona, content_generator)
-    elif action == ACTION_COMMENT:
-        await _do_comment(session, agent, persona, content_generator)
-    elif action == ACTION_REACTION:
-        await _do_reaction(session, agent)
-
-    agent_repo = AgentRepository(session)
-    # Re-fetch agent to avoid detached instance
-    fresh_agent = await agent_repo.get_by_id(agent.id)
-    if fresh_agent:
-        await agent_repo.update(fresh_agent, last_action_at=datetime.now(UTC))
     await session.commit()
-
-
-def _filter_by_cooldown(agents: list[AgentProfile], cooldown_seconds: int) -> list[AgentProfile]:
-    now = datetime.now(UTC)
-    eligible = []
-    for agent in agents:
-        if agent.last_action_at is None:
-            eligible.append(agent)
-        else:
-            last = agent.last_action_at
-            if last.tzinfo is None:
-                last = last.replace(tzinfo=timezone.utc)
-            elapsed = (now - last).total_seconds()
-            if elapsed >= cooldown_seconds:
-                eligible.append(agent)
-    return eligible
 
 
 async def _do_create_post(
     session: AsyncSession,
-    agent: AgentProfile,
+    user_id: 'uuid.UUID',
     persona: Persona,
     generator: ContentGenerator,
 ) -> None:
+    import uuid
+
     result = await generator.generate_post(persona)
     post_repo = PostRepository(session)
     post = await post_repo.create(
-        author_id=agent.user_id,
+        author_id=user_id,
         title=result.get("title", "Untitled")[:200],
         content=result.get("content", "")[:5000],
     )
     await session.flush()
     await event_bus.publish(PostCreated(post_id=post.id, author_id=post.author_id))
-    logger.info("Agent %s (model=%s) created post: %s", persona.nickname, persona.model, post.id)
+    logger.info("[%s] Created post: %s", persona.nickname, post.title[:50])
 
 
 async def _do_comment(
     session: AsyncSession,
-    agent: AgentProfile,
+    user_id: 'uuid.UUID',
     persona: Persona,
     generator: ContentGenerator,
 ) -> None:
     post_repo = PostRepository(session)
-    posts = await post_repo.get_list(PaginationParams(page=1, size=10))
+    posts = await post_repo.get_list(PaginationParams(page=1, size=persona.recent_scope))
     if not posts.items:
-        logger.debug("No posts to comment on")
         return
 
     post = random.choice(posts.items)
@@ -191,42 +179,74 @@ async def _do_comment(
     comment_repo = CommentRepository(session)
     comment = await comment_repo.create(
         post_id=post.id,
-        author_id=agent.user_id,
+        author_id=user_id,
         content=comment_text[:2000],
     )
     await session.flush()
-    await event_bus.publish(CommentCreated(comment_id=comment.id, post_id=post.id, author_id=agent.user_id))
-    logger.info("Agent %s (model=%s) commented on post %s", persona.nickname, persona.model, post.id)
+    await event_bus.publish(CommentCreated(comment_id=comment.id, post_id=post.id, author_id=user_id))
+    logger.info("[%s] Commented on post %s", persona.nickname, post.id)
+
+
+async def _do_reply(
+    session: AsyncSession,
+    user_id: 'uuid.UUID',
+    persona: Persona,
+    generator: ContentGenerator,
+) -> None:
+    post_repo = PostRepository(session)
+    posts = await post_repo.get_list(PaginationParams(page=1, size=persona.recent_scope))
+    if not posts.items:
+        return
+
+    post = random.choice(posts.items)
+    comment_repo = CommentRepository(session)
+    comments = await comment_repo.get_by_post(post.id, PaginationParams(page=1, size=persona.recent_scope))
+    if not comments.items:
+        return
+
+    parent = random.choice(comments.items)
+    reply_text = await generator.generate_comment(persona, post.title, parent.content)
+
+    reply = await comment_repo.create(
+        post_id=post.id,
+        author_id=user_id,
+        content=reply_text[:2000],
+        parent_id=parent.id,
+        depth=parent.depth + 1,
+    )
+    await session.flush()
+    await event_bus.publish(CommentCreated(comment_id=reply.id, post_id=post.id, author_id=user_id))
+    logger.info("[%s] Replied to comment %s", persona.nickname, parent.id)
 
 
 async def _do_reaction(
     session: AsyncSession,
-    agent: AgentProfile,
+    user_id: 'uuid.UUID',
+    persona: Persona,
+    reaction_type: str,
 ) -> None:
     post_repo = PostRepository(session)
-    posts = await post_repo.get_list(PaginationParams(page=1, size=10))
+    posts = await post_repo.get_list(PaginationParams(page=1, size=persona.recent_scope))
     if not posts.items:
-        logger.debug("No posts to react to")
         return
 
     post = random.choice(posts.items)
-    if post.author_id == agent.user_id:
+    if post.author_id == user_id:
         return
 
     reaction_repo = ReactionRepository(session)
-    existing = await reaction_repo.get_by_user_and_target(agent.user_id, "post", post.id)
+    existing = await reaction_repo.get_by_user_and_target(user_id, "post", post.id)
     if existing:
         return
 
-    reaction_type = random.choice(["like", "dislike"])
     await reaction_repo.create(
-        user_id=agent.user_id,
+        user_id=user_id,
         target_type="post",
         target_id=post.id,
         reaction_type=reaction_type,
     )
     await session.flush()
     await event_bus.publish(
-        ReactionCreated(user_id=agent.user_id, target_type="post", target_id=post.id, reaction_type=reaction_type)
+        ReactionCreated(user_id=user_id, target_type="post", target_id=post.id, reaction_type=reaction_type)
     )
-    logger.info("Agent reacted to post %s with %s", post.id, reaction_type)
+    logger.info("[%s] %s on post %s", persona.nickname, reaction_type, post.id)
