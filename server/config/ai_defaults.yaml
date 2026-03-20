@@ -13,11 +13,14 @@ content_generation:
   rag_retrieve_count: 3
 
   model_token_limits:
+    "smollm2": 80
     "qwen2:1.5b": 100
     "llama3.2:1b": 120
+    "qwen3:1.7b": 150
     "gemma2:2b": 150
+    "exaone3.5:2.4b": 180
     "phi3:mini": 150
-    "smollm2": 80
+    "gemma3:4b": 200
 
 reaction_delay:
   min_seconds: 5
