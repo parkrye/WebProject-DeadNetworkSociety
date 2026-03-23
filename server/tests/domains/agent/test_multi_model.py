@@ -6,7 +6,7 @@ from src.domains.agent.action_selector import generate_action_set, ALL_ACTIONS
 def test_content_generator_resolves_persona_model() -> None:
     generator = ContentGenerator(base_url="http://localhost:11434", default_model="llama3")
     persona = Persona(
-        name="test", nickname="Test", personality="test",
+        name="test", nickname="Test",
         writing_style="test", topics=["test"], model="gemma2",
     )
 
@@ -16,7 +16,7 @@ def test_content_generator_resolves_persona_model() -> None:
 def test_content_generator_falls_back_to_default() -> None:
     generator = ContentGenerator(base_url="http://localhost:11434", default_model="llama3")
     persona = Persona(
-        name="test", nickname="Test", personality="test",
+        name="test", nickname="Test",
         writing_style="test", topics=["test"], model="",
     )
 
@@ -56,40 +56,43 @@ def test_activity_level_distribution() -> None:
     assert max(all_levels) >= 8, "Should have active personas"
 
 
-def test_archetype_prompt_injected_in_system_prompt() -> None:
+def test_model_tier_resolution() -> None:
+    generator = ContentGenerator(base_url="http://localhost:11434", default_model="llama3")
+
+    assert generator._get_model_tier("llama3.2:1b") == "small"
+    assert generator._get_model_tier("gemma2:2b") == "medium"
+    assert generator._get_model_tier("gemma3:4b") == "large"
+    assert generator._get_model_tier("unknown_model") == "medium"
+
+
+def test_archetype_prompt_retrieved() -> None:
     generator = ContentGenerator(base_url="http://localhost:11434", default_model="llama3")
     persona = Persona(
-        name="test", nickname="Test", personality="test personality",
+        name="test", nickname="Test",
         writing_style="test style", topics=["test"],
         model="llama3", archetype="expert",
         archetype_detail="요리 전문가. 식재료의 과학에 정통하다.",
     )
 
-    system_prompt = generator._build_system_prompt(persona)
+    archetype_prompt = generator._get_archetype_prompt(persona)
 
-    assert "test personality" in system_prompt
-    assert "test style" in system_prompt
-    assert "행동 원형:" in system_prompt
-    assert "구체적 역할:" in system_prompt
-    assert "요리 전문가" in system_prompt
+    assert "전문가" in archetype_prompt
 
 
-def test_no_archetype_no_injection() -> None:
+def test_no_archetype_no_prompt() -> None:
     generator = ContentGenerator(base_url="http://localhost:11434", default_model="llama3")
     persona = Persona(
-        name="test", nickname="Test", personality="test",
+        name="test", nickname="Test",
         writing_style="test", topics=["test"], model="llama3",
     )
 
-    system_prompt = generator._build_system_prompt(persona)
-
-    assert "행동 원형:" not in system_prompt
+    assert generator._get_archetype_prompt(persona) == ""
 
 
 def test_persona_example_injected_for_post() -> None:
     generator = ContentGenerator(base_url="http://localhost:11434", default_model="llama3")
     persona = Persona(
-        name="test", nickname="Test", personality="test",
+        name="test", nickname="Test",
         writing_style="test", topics=["test"], model="llama3",
         examples=PersonaExamples(
             post_title="테스트 제목",
@@ -108,7 +111,7 @@ def test_persona_example_injected_for_post() -> None:
 def test_persona_example_injected_for_comment() -> None:
     generator = ContentGenerator(base_url="http://localhost:11434", default_model="llama3")
     persona = Persona(
-        name="test", nickname="Test", personality="test",
+        name="test", nickname="Test",
         writing_style="test", topics=["test"], model="llama3",
         examples=PersonaExamples(
             post_title="제목", post_content="본문",
@@ -125,7 +128,7 @@ def test_persona_example_injected_for_comment() -> None:
 def test_no_examples_no_injection() -> None:
     generator = ContentGenerator(base_url="http://localhost:11434", default_model="llama3")
     persona = Persona(
-        name="test", nickname="Test", personality="test",
+        name="test", nickname="Test",
         writing_style="test", topics=["test"], model="llama3",
     )
 

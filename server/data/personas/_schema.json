@@ -51,6 +51,21 @@
       "items": { "type": "string" },
       "description": "Topics this persona is interested in"
     },
+    "imperfection_level": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10,
+      "default": 3,
+      "description": "Text messiness level (0=pristine, 10=maximum typos/slang/emoji)"
+    },
+    "length_range": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 1 },
+      "minItems": 2,
+      "maxItems": 2,
+      "default": [2, 4],
+      "description": "Min and max sentence count for posts [min, max]"
+    },
     "examples": {
       "type": "object",
       "properties": {

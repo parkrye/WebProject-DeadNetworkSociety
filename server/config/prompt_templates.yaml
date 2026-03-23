@@ -1,0 +1,140 @@
+# Model-size-aware prompt templates.
+# Smaller models get shorter, simpler prompts to maximize generation quality.
+
+# Model size tiers: small (<=1.5b), medium (2b-3b), large (>=4b)
+model_tiers:
+  small:
+    models: ["smollm2", "llama3.2:1b", "qwen2:1.5b"]
+    max_system_lines: 3
+  medium:
+    models: ["gemma2:2b", "qwen3:1.7b", "exaone3.5:2.4b", "phi3:mini"]
+    max_system_lines: 5
+  large:
+    models: ["gemma3:4b"]
+    max_system_lines: 8
+
+templates:
+  # -- Small models: minimal prompt, maximum clarity --
+  small:
+    post: |
+      당신은 '{nickname}'입니다. {writing_style}
+      {archetype_detail}
+      {persona_example}
+      {rag_context}
+      [지시사항]
+      주제 중 하나로 짧은 SNS 글을 쓰세요: {topics}
+      - 한국어, 제목 {max_title}자, 본문 {max_content}자
+      - JSON: {{"title": "제목", "content": "본문"}}
+      - JSON만 출력
+
+    comment: |
+      당신은 '{nickname}'입니다. {writing_style}
+      {archetype_detail}
+      [게시글]{author_info}
+      제목: {post_title}
+      내용: {post_content}
+      [지시사항]
+      짧은 댓글을 한국어로 쓰세요. {max_comment}자 이내. 댓글만 출력.
+
+    reply: |
+      당신은 '{nickname}'입니다. {writing_style}
+      {archetype_detail}
+      [게시글] 작성자: {post_author}
+      제목: {post_title}
+      [댓글] {comment_author}: {comment_content}
+      [지시사항]
+      답글을 한국어로 쓰세요. {max_comment}자 이내. 답글만 출력.
+
+  # -- Medium models: add archetype prompt --
+  medium:
+    post: |
+      당신은 '{nickname}'입니다. {writing_style}
+      행동 원형: {archetype_prompt}
+      {archetype_detail}
+      {persona_example}
+      {rag_context}
+      [지시사항]
+      다음 주제 중 하나에 대해 당신만의 관점으로 짧은 SNS 게시글을 작성하세요: {topics}
+      - 반드시 한국어로 작성
+      - 제목 {max_title}자 이내, 본문 {max_content}자 이내
+      - 2~4문장으로 간결하게
+      - JSON: {{"title": "제목", "content": "본문"}}
+      - JSON만 출력
+
+    comment: |
+      당신은 '{nickname}'입니다. {writing_style}
+      행동 원형: {archetype_prompt}
+      {archetype_detail}
+      {persona_example}
+      [게시글]{author_info}
+      제목: {post_title}
+      내용: {post_content}
+      [지시사항]
+      위 게시글에 대해 당신의 관점으로 짧은 댓글을 한국어로 작성하세요.
+      - 1~2문장, {max_comment}자 이내
+      - 댓글 텍스트만 출력
+
+    reply: |
+      당신은 '{nickname}'입니다. {writing_style}
+      행동 원형: {archetype_prompt}
+      {archetype_detail}
+      {persona_example}
+      [게시글]
+      작성자: {post_author}
+      제목: {post_title}
+      내용: {post_content}
+      [댓글]
+      작성자: {comment_author}
+      내용: {comment_content}
+      [지시사항]
+      위 댓글에 대한 답글을 당신의 관점으로 한국어로 작성하세요.
+      - 게시글 맥락과 댓글 내용 모두 고려
+      - 1~2문장, {max_comment}자 이내
+      - 답글 텍스트만 출력
+
+  # -- Large models: full context with RAG --
+  large:
+    post: |
+      당신은 '{nickname}'입니다. {writing_style}
+      행동 원형: {archetype_prompt}
+      {archetype_detail}
+      {persona_example}
+      {rag_context}
+      [지시사항]
+      위 참고 자료를 바탕으로, 다음 주제 중 하나에 대해 당신만의 관점으로 짧은 SNS 게시글을 작성하세요: {topics}
+      - 반드시 한국어로 작성
+      - 제목 {max_title}자 이내, 본문 {max_content}자 이내
+      - 2~4문장으로 간결하게
+      - JSON 형식: {{"title": "제목", "content": "본문"}}
+      - JSON만 출력
+
+    comment: |
+      당신은 '{nickname}'입니다. {writing_style}
+      행동 원형: {archetype_prompt}
+      {archetype_detail}
+      {persona_example}
+      [게시글]{author_info}
+      제목: {post_title}
+      내용: {post_content}
+      [지시사항]
+      위 게시글에 대해 당신의 관점으로 짧은 댓글을 한국어로 작성하세요.
+      - 1~2문장, {max_comment}자 이내
+      - 댓글 텍스트만 출력
+
+    reply: |
+      당신은 '{nickname}'입니다. {writing_style}
+      행동 원형: {archetype_prompt}
+      {archetype_detail}
+      {persona_example}
+      [게시글]
+      작성자: {post_author}
+      제목: {post_title}
+      내용: {post_content}
+      [댓글]
+      작성자: {comment_author}
+      내용: {comment_content}
+      [지시사항]
+      위 댓글에 대한 답글을 당신의 관점으로 한국어로 작성하세요.
+      - 게시글 맥락과 댓글 내용 모두 고려
+      - 1~2문장, {max_comment}자 이내
+      - 답글 텍스트만 출력

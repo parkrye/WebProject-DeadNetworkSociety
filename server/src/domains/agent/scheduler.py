@@ -11,12 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from src.domains.agent.action_selector import (
     ACTION_COMMENT,
     ACTION_CREATE_POST,
+    ACTION_QUICK_REACT,
     ACTION_REPLY,
     AgentAction,
     generate_action_set,
 )
 from src.domains.agent.auto_reaction import auto_react_to_content
 from src.domains.agent.content_generator import ContentGenerator, OllamaUnavailableError
+from src.domains.agent.quick_reaction_pool import QuickReactionPool
 from src.domains.agent.status_store import update_status
 from src.domains.agent.persona_loader import Persona, load_personas_by_model
 from src.domains.post.repository import PostRepository
@@ -34,6 +36,9 @@ AI_DEFAULTS_PATH = Path(__file__).resolve().parent.parent.parent.parent / "confi
 def _load_scheduler_defaults() -> dict:
     with open(AI_DEFAULTS_PATH, encoding="utf-8") as f:
         return yaml.safe_load(f)["scheduler"]
+
+
+_quick_reaction_pool = QuickReactionPool()
 
 
 async def start_all_model_loops(
@@ -118,9 +123,10 @@ ACTION_TYPE_LABELS = {
     ACTION_CREATE_POST: "게시글 작성 중",
     ACTION_COMMENT: "댓글 작성 중",
     ACTION_REPLY: "답글 작성 중",
+    ACTION_QUICK_REACT: "짧은 반응 중",
 }
 
-NEEDS_POSTS = {ACTION_COMMENT, ACTION_REPLY}
+NEEDS_POSTS = {ACTION_COMMENT, ACTION_REPLY, ACTION_QUICK_REACT}
 
 
 async def _execute_action(
@@ -152,6 +158,8 @@ async def _execute_action(
         await _do_comment(session, user.id, persona, content_generator)
     elif action.action_type == ACTION_REPLY:
         await _do_reply(session, user.id, persona, content_generator)
+    elif action.action_type == ACTION_QUICK_REACT:
+        await _do_quick_react(session, user.id, persona)
 
     await session.commit()
     update_status(persona.nickname, "대기")
@@ -263,3 +271,29 @@ async def _do_reply(
     await auto_react_to_content(session, persona.nickname, reply_text, "comment", reply.id)
 
     logger.info("[%s] Replied to %s's comment on %s's post", persona.nickname, comment_author_name, post_author_name)
+
+
+async def _do_quick_react(
+    session: AsyncSession,
+    user_id: 'uuid.UUID',
+    persona: Persona,
+) -> None:
+    """Post a quick reaction comment (no LLM call) from the archetype reaction pool."""
+    post_repo = PostRepository(session)
+    posts = await post_repo.get_list(PaginationParams(page=1, size=persona.recent_scope))
+    if not posts.items:
+        return
+
+    post = random.choice(posts.items)
+    reaction_text = _quick_reaction_pool.pick(persona.archetype)
+
+    comment_repo = CommentRepository(session)
+    comment = await comment_repo.create(
+        post_id=post.id,
+        author_id=user_id,
+        content=reaction_text,
+    )
+    await session.flush()
+    await event_bus.publish(CommentCreated(comment_id=comment.id, post_id=post.id, author_id=user_id))
+
+    logger.info("[%s] Quick reaction on post %s: %s", persona.nickname, post.id, reaction_text)

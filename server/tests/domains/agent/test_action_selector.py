@@ -1,6 +1,7 @@
 from src.domains.agent.action_selector import (
     ACTION_COMMENT,
     ACTION_CREATE_POST,
+    ACTION_QUICK_REACT,
     ACTION_REPLY,
     ALL_ACTIONS,
     AgentAction,
@@ -11,7 +12,7 @@ from src.domains.agent.persona_loader import Persona
 
 def _make_persona(name: str = "test", activity_level: int = 5) -> Persona:
     return Persona(
-        name=name, nickname=name.title(), personality="test",
+        name=name, nickname=name.title(),
         writing_style="test", topics=["test"], model="llama3",
         activity_level=activity_level, recent_scope=10,
     )
@@ -30,7 +31,7 @@ def test_generate_action_set_only_content_actions() -> None:
         for action in generate_action_set(personas):
             all_types.add(action.action_type)
 
-    assert all_types == {ACTION_COMMENT, ACTION_REPLY, ACTION_CREATE_POST}
+    assert all_types == {ACTION_COMMENT, ACTION_REPLY, ACTION_CREATE_POST, ACTION_QUICK_REACT}
     assert "like" not in all_types
     assert "dislike" not in all_types
 

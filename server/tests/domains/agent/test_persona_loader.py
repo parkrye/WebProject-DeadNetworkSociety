@@ -147,13 +147,15 @@ def test_all_personas_have_valid_fields() -> None:
         assert p.name, f"Missing name: {p}"
         assert p.nickname, f"Missing nickname: {p}"
         assert p.model, f"Missing model: {p}"
-        assert p.personality, f"Missing personality: {p}"
         assert p.writing_style, f"Missing writing_style: {p}"
         assert len(p.topics) > 0, f"No topics: {p}"
         assert 1 <= p.activity_level <= 10, f"Invalid activity_level: {p}"
         assert p.recent_scope >= 1, f"Invalid recent_scope: {p}"
         assert p.archetype in VALID_ARCHETYPES, f"Invalid archetype '{p.archetype}': {p.nickname}"
         assert p.archetype_detail, f"{p.nickname} missing archetype_detail"
+        assert 0 <= p.imperfection_level <= 10, f"Invalid imperfection_level: {p.nickname}"
+        assert p.length_range[0] >= 1, f"Invalid length_range min: {p.nickname}"
+        assert p.length_range[1] >= p.length_range[0], f"Invalid length_range: {p.nickname}"
 
 
 def test_all_archetypes_represented() -> None:

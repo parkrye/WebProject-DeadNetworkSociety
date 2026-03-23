@@ -12,6 +12,9 @@ MIN_ACTIVITY_LEVEL = 1
 MAX_ACTIVITY_LEVEL = 10
 DEFAULT_ACTIVITY_LEVEL = 5
 DEFAULT_RECENT_SCOPE = 10
+DEFAULT_IMPERFECTION_LEVEL = 3
+DEFAULT_LENGTH_RANGE_MIN = 2
+DEFAULT_LENGTH_RANGE_MAX = 4
 
 VALID_ARCHETYPES = frozenset({
     "expert", "concepter", "provocateur", "storyteller",
@@ -36,14 +39,16 @@ class PersonaPreferences:
 class Persona:
     name: str
     nickname: str
-    personality: str
     writing_style: str
     topics: list[str]
+    personality: str = ""
     archetype: str = ""
     archetype_detail: str = ""
     model: str = ""
     activity_level: int = DEFAULT_ACTIVITY_LEVEL
     recent_scope: int = DEFAULT_RECENT_SCOPE
+    imperfection_level: int = DEFAULT_IMPERFECTION_LEVEL
+    length_range: tuple[int, int] = (DEFAULT_LENGTH_RANGE_MIN, DEFAULT_LENGTH_RANGE_MAX)
     examples: PersonaExamples = field(default_factory=PersonaExamples)
     preferences: PersonaPreferences = field(default_factory=PersonaPreferences)
 
@@ -72,10 +77,19 @@ def load_persona(file_path: Path) -> Persona:
         dislikes=prefs_data.get("dislikes", []),
     )
 
+    imperfection_level = data.get("imperfection_level", DEFAULT_IMPERFECTION_LEVEL)
+    imperfection_level = max(0, min(10, imperfection_level))
+
+    length_raw = data.get("length_range", [DEFAULT_LENGTH_RANGE_MIN, DEFAULT_LENGTH_RANGE_MAX])
+    length_range = (
+        max(1, int(length_raw[0])) if len(length_raw) > 0 else DEFAULT_LENGTH_RANGE_MIN,
+        max(1, int(length_raw[1])) if len(length_raw) > 1 else DEFAULT_LENGTH_RANGE_MAX,
+    )
+
     return Persona(
         name=data["name"],
         nickname=data["nickname"],
-        personality=data["personality"],
+        personality=data.get("personality", ""),
         writing_style=data["writing_style"],
         topics=data["topics"],
         archetype=archetype,
@@ -83,6 +97,8 @@ def load_persona(file_path: Path) -> Persona:
         model=data.get("model", ""),
         activity_level=activity_level,
         recent_scope=data.get("recent_scope", DEFAULT_RECENT_SCOPE),
+        imperfection_level=imperfection_level,
+        length_range=length_range,
         examples=examples,
         preferences=preferences,
     )
