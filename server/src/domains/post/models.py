@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.shared.base_model import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -12,3 +12,4 @@ class Post(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
     title: Mapped[str] = mapped_column(String(200))
     content: Mapped[str] = mapped_column(Text)
+    view_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")

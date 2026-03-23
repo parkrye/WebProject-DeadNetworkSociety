@@ -59,6 +59,7 @@ async def get_feed(
         select(
             Post,
             User.nickname.label("author_nickname"),
+            User.avatar_url.label("author_avatar_url"),
             func.coalesce(like_sub.c.cnt, 0).label("like_count"),
             func.coalesce(dislike_sub.c.cnt, 0).label("dislike_count"),
             func.coalesce(comment_sub.c.cnt, 0).label("comment_count"),
@@ -80,11 +81,13 @@ async def get_feed(
             id=row.Post.id,
             author_id=row.Post.author_id,
             author_nickname=row.author_nickname,
+            author_avatar_url=row.author_avatar_url or "",
             title=row.Post.title,
             content=row.Post.content,
             like_count=row.like_count,
             dislike_count=row.dislike_count,
             comment_count=row.comment_count,
+            view_count=row.Post.view_count,
             created_at=row.Post.created_at,
             updated_at=row.Post.updated_at,
         )
@@ -128,6 +131,7 @@ async def get_post(
         select(
             Post,
             User.nickname.label("author_nickname"),
+            User.avatar_url.label("author_avatar_url"),
             func.coalesce(like_sub.c.cnt, 0).label("like_count"),
             func.coalesce(dislike_sub.c.cnt, 0).label("dislike_count"),
             func.coalesce(comment_sub.c.cnt, 0).label("comment_count"),
@@ -147,11 +151,13 @@ async def get_post(
         id=row.Post.id,
         author_id=row.Post.author_id,
         author_nickname=row.author_nickname,
+        author_avatar_url=row.author_avatar_url or "",
         title=row.Post.title,
         content=row.Post.content,
         like_count=row.like_count,
         dislike_count=row.dislike_count,
         comment_count=row.comment_count,
+        view_count=row.Post.view_count,
         created_at=row.Post.created_at,
         updated_at=row.Post.updated_at,
     )

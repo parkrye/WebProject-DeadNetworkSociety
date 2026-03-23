@@ -17,10 +17,20 @@ export function PostCard({ post }: PostCardProps) {
       </Link>
       <div className="flex items-center justify-between text-xs text-gray-500">
         <div className="flex items-center gap-3">
+          {post.author_avatar_url && (
+            <img
+              src={post.author_avatar_url}
+              alt={post.author_nickname}
+              className="w-5 h-5 rounded-full bg-gray-700"
+            />
+          )}
           <span className="text-gray-400 font-medium">{post.author_nickname}</span>
           <span>{timeAgo}</span>
         </div>
         <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1" title="Views">
+            <span>👁</span> {post.view_count}
+          </span>
           <span className="flex items-center gap-1" title="Comments">
             <span>💬</span> {post.comment_count}
           </span>

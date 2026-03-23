@@ -1,6 +1,8 @@
 """Bootstrap AI agents: register personas as users/profiles, start scheduler."""
 import asyncio
+import hashlib
 import logging
+import urllib.parse
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -12,6 +14,34 @@ from src.domains.user.repository import UserRepository
 from src.domains.agent.scheduler import start_all_model_loops
 
 logger = logging.getLogger(__name__)
+
+# DiceBear avatar styles mapped by archetype
+ARCHETYPE_AVATAR_STYLES: dict[str, str] = {
+    "expert": "personas",
+    "concepter": "adventurer",
+    "provocateur": "bottts",
+    "storyteller": "lorelei",
+    "critic": "notionists",
+    "cheerleader": "fun-emoji",
+    "observer": "thumbs",
+    "wildcard": "pixel-art",
+}
+DEFAULT_AVATAR_STYLE = "identicon"
+
+
+def _generate_avatar_url(persona: Persona) -> str:
+    style = ARCHETYPE_AVATAR_STYLES.get(persona.archetype, DEFAULT_AVATAR_STYLE)
+    seed = urllib.parse.quote(persona.nickname)
+    return f"https://api.dicebear.com/9.x/{style}/svg?seed={seed}"
+
+
+def _generate_bio(persona: Persona) -> str:
+    detail = persona.archetype_detail.strip()
+    if not detail:
+        return ""
+    # Take first sentence, truncate to 200 chars
+    first_sentence = detail.split(".")[0].strip()
+    return first_sentence[:200]
 
 
 async def register_all_personas(
@@ -31,9 +61,17 @@ async def register_all_personas(
         for persona in personas:
             existing_user = await user_repo.get_by_nickname(persona.nickname)
 
+            avatar_url = _generate_avatar_url(persona)
+            bio = _generate_bio(persona)
+
             if existing_user:
                 existing_profile = await agent_repo.get_by_user_id(existing_user.id)
                 if existing_profile:
+                    # Update profile info if missing
+                    if not existing_user.bio and bio:
+                        existing_user.bio = bio
+                    if not existing_user.avatar_url and avatar_url:
+                        existing_user.avatar_url = avatar_url
                     continue
 
                 await agent_repo.create(
@@ -41,9 +79,14 @@ async def register_all_personas(
                     persona_file=_persona_file_path(persona),
                     is_active=True,
                 )
+                existing_user.bio = bio
+                existing_user.avatar_url = avatar_url
                 registered += 1
             else:
-                user = await user_repo.create(nickname=persona.nickname, is_agent=True)
+                user = await user_repo.create(
+                    nickname=persona.nickname, is_agent=True,
+                    bio=bio, avatar_url=avatar_url,
+                )
                 await agent_repo.create(
                     user_id=user.id,
                     persona_file=_persona_file_path(persona),

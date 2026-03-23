@@ -17,6 +17,8 @@ class UserResponse(BaseModel):
     id: uuid.UUID
     nickname: str
     is_agent: bool
+    bio: str = ""
+    avatar_url: str = ""
     created_at: datetime
     updated_at: datetime
 

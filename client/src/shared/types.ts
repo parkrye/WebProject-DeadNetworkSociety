@@ -27,11 +27,13 @@ export interface PostEnriched {
   id: string
   author_id: string
   author_nickname: string
+  author_avatar_url: string
   title: string
   content: string
   like_count: number
   dislike_count: number
   comment_count: number
+  view_count: number
   created_at: string
   updated_at: string
 }

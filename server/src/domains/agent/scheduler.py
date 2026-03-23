@@ -169,6 +169,35 @@ async def _execute_action(
     update_status(persona.nickname, "대기")
 
 
+async def _find_self_post_comment(
+    post_repo: PostRepository,
+    comment_repo: CommentRepository,
+    user_id: 'uuid.UUID',
+    persona: Persona,
+) -> tuple:
+    """Find an unanswered comment on the persona's own post. Returns (post, comment) or (None, None)."""
+    import uuid as _uuid
+
+    own_posts = await post_repo.get_recent_by_author(user_id, limit=5)
+    if not own_posts:
+        return None, None
+
+    for post in own_posts:
+        comments = await comment_repo.get_by_post(post.id, PaginationParams(page=1, size=20))
+        if not comments.items:
+            continue
+
+        # Find comments by others that the persona hasn't replied to
+        other_comments = [c for c in comments.items if c.author_id != user_id and c.depth == 0]
+        replied_parent_ids = {c.parent_id for c in comments.items if c.author_id == user_id and c.parent_id}
+
+        unanswered = [c for c in other_comments if c.id not in replied_parent_ids]
+        if unanswered:
+            return post, random.choice(unanswered)
+
+    return None, None
+
+
 async def _collect_engagement(session: AsyncSession, posts: list[Post]) -> dict:
     """Collect comment and reaction counts for posts."""
     from sqlalchemy import func, select
@@ -262,6 +291,8 @@ async def _do_comment(
     if not post:
         return
 
+    await post_repo.increment_view_count(post.id)
+
     post_author_name = author_nicknames.get(post.author_id, "알 수 없음")
 
     comment_text = await generator.generate_comment(
@@ -292,34 +323,42 @@ async def _do_reply(
     generator: ContentGenerator,
 ) -> None:
     post_repo = PostRepository(session)
-    posts = await post_repo.get_list(PaginationParams(page=1, size=persona.recent_scope))
-    if not posts.items:
-        return
-
-    author_ids = {p.author_id for p in posts.items}
-    author_nicknames = await _collect_author_nicknames(session, author_ids)
-    engagement_data = await _collect_engagement(session, posts.items)
-
-    post = select_post(persona, posts.items, author_nicknames, engagement_data)
-    if not post:
-        return
-
-    post_author_name = author_nicknames.get(post.author_id, "알 수 없음")
-
     comment_repo = CommentRepository(session)
-    comments = await comment_repo.get_by_post(post.id, PaginationParams(page=1, size=persona.recent_scope))
-    if not comments.items:
-        return
 
-    # Collect comment author nicknames for affinity-weighted selection
-    comment_author_ids = {c.author_id for c in comments.items}
-    comment_author_nicks = await _collect_author_nicknames(session, comment_author_ids)
+    # Priority: reply to comments on own posts first
+    post, parent = await _find_self_post_comment(post_repo, comment_repo, user_id, persona)
 
-    parent = select_comment(persona, comments.items, comment_author_nicks)
-    if not parent:
-        return
+    if not post:
+        # Fallback: normal weighted selection
+        posts = await post_repo.get_list(PaginationParams(page=1, size=persona.recent_scope))
+        if not posts.items:
+            return
 
-    comment_author_name = comment_author_nicks.get(parent.author_id, "알 수 없음")
+        author_ids = {p.author_id for p in posts.items}
+        author_nicknames = await _collect_author_nicknames(session, author_ids)
+        engagement_data = await _collect_engagement(session, posts.items)
+
+        post = select_post(persona, posts.items, author_nicknames, engagement_data)
+        if not post:
+            return
+
+        comments = await comment_repo.get_by_post(post.id, PaginationParams(page=1, size=persona.recent_scope))
+        if not comments.items:
+            return
+
+        comment_author_ids = {c.author_id for c in comments.items}
+        comment_author_nicks = await _collect_author_nicknames(session, comment_author_ids)
+        parent = select_comment(persona, comments.items, comment_author_nicks)
+        if not parent:
+            return
+
+    await post_repo.increment_view_count(post.id)
+
+    user_repo = UserRepository(session)
+    post_author = await user_repo.get_by_id(post.author_id)
+    post_author_name = post_author.nickname if post_author else "알 수 없음"
+    comment_author = await user_repo.get_by_id(parent.author_id)
+    comment_author_name = comment_author.nickname if comment_author else "알 수 없음"
 
     reply_text = await generator.generate_reply(
         persona, post.title, post.content, post_author_name,
@@ -364,6 +403,8 @@ async def _do_quick_react(
     post = select_post(persona, posts.items, author_nicknames, engagement_data)
     if not post:
         return
+
+    await post_repo.increment_view_count(post.id)
 
     reaction_text = _quick_reaction_pool.pick(persona.archetype)
 

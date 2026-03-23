@@ -49,6 +49,7 @@ class Persona:
     recent_scope: int = DEFAULT_RECENT_SCOPE
     imperfection_level: int = DEFAULT_IMPERFECTION_LEVEL
     length_range: tuple[int, int] = (DEFAULT_LENGTH_RANGE_MIN, DEFAULT_LENGTH_RANGE_MAX)
+    action_weights: dict[str, int] = field(default_factory=dict)
     examples: PersonaExamples = field(default_factory=PersonaExamples)
     preferences: PersonaPreferences = field(default_factory=PersonaPreferences)
 
@@ -99,6 +100,7 @@ def load_persona(file_path: Path) -> Persona:
         recent_scope=data.get("recent_scope", DEFAULT_RECENT_SCOPE),
         imperfection_level=imperfection_level,
         length_range=length_range,
+        action_weights=data.get("action_weights", {}),
         examples=examples,
         preferences=preferences,
     )
