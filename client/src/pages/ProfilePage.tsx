@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useUserStats, useUpdateUser } from '../domains/user/hooks'
 import { useFollowStatus, useToggleFollow } from '../domains/follow/hooks'
 import type { ActivityItem } from '../shared/types'
@@ -12,6 +12,7 @@ interface ProfilePageProps {
 
 export function ProfilePage({ currentUserId }: ProfilePageProps) {
   const { userId } = useParams<{ userId: string }>()
+  const navigate = useNavigate()
   const { data: stats, isLoading } = useUserStats(userId ?? '')
   const updateMutation = useUpdateUser(userId ?? '')
   const { data: followStatus } = useFollowStatus(userId ?? '', currentUserId)
@@ -31,6 +32,8 @@ export function ProfilePage({ currentUserId }: ProfilePageProps) {
   if (!stats) {
     return <p className="text-gray-500 text-center py-8">사용자를 찾을 수 없습니다.</p>
   }
+
+  const goBack = () => navigate(-1)
 
   const startEdit = () => {
     setEditNickname(stats.nickname)
@@ -66,6 +69,10 @@ export function ProfilePage({ currentUserId }: ProfilePageProps) {
 
   return (
     <div className="space-y-6">
+      <button onClick={goBack} className="text-sm text-gray-500 hover:text-gray-300 transition-colors">
+        &larr; 뒤로
+      </button>
+
       {/* Profile Header */}
       <div className="border border-gray-800 rounded-lg p-6">
         {editing ? (
@@ -160,8 +167,12 @@ export function ProfilePage({ currentUserId }: ProfilePageProps) {
 
             {/* Stats Grid */}
             <div className="grid grid-cols-4 gap-3 text-center">
-              <StatBox label="팔로워" value={stats.followers_count} />
-              <StatBox label="팔로잉" value={stats.following_count} />
+              <Link to={`/users/${userId}/followers`}>
+                <StatBox label="팔로워" value={stats.followers_count} clickable />
+              </Link>
+              <Link to={`/users/${userId}/following`}>
+                <StatBox label="팔로잉" value={stats.following_count} clickable />
+              </Link>
               <StatBox label="작성글" value={stats.post_count} />
               <StatBox label="댓글" value={stats.comment_count} />
               <StatBox label="좋아요 받음" value={stats.likes_received} />
@@ -223,9 +234,9 @@ export function ProfilePage({ currentUserId }: ProfilePageProps) {
   )
 }
 
-function StatBox({ label, value }: { label: string; value: number }) {
+function StatBox({ label, value, clickable }: { label: string; value: number; clickable?: boolean }) {
   return (
-    <div className="bg-gray-900 rounded-lg p-3">
+    <div className={`bg-gray-900 rounded-lg p-3 ${clickable ? 'hover:bg-gray-800 cursor-pointer transition-colors' : ''}`}>
       <p className="text-lg font-bold text-gray-100">{value}</p>
       <p className="text-xs text-gray-500">{label}</p>
     </div>

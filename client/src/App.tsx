@@ -1,12 +1,45 @@
 import { useState, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
 import { FeedPage } from './pages/FeedPage'
+import { PopularPage } from './pages/PopularPage'
+import { RankingPage } from './pages/RankingPage'
 import { PostDetailPage } from './pages/PostDetailPage'
 import { AdminPage } from './pages/AdminPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { FollowListPage } from './pages/FollowListPage'
 import { userApi } from './domains/user/api'
 
 const STORAGE_KEY = 'dns_user'
+
+function NavTabs() {
+  const location = useLocation()
+  const tabs = [
+    { path: '/', label: '게시판' },
+    { path: '/popular', label: '인기글' },
+    { path: '/ranking', label: '랭킹' },
+  ]
+
+  return (
+    <nav className="flex gap-4 text-sm">
+      {tabs.map((tab) => (
+        <Link
+          key={tab.path}
+          to={tab.path}
+          className={`transition-colors ${
+            location.pathname === tab.path
+              ? 'text-indigo-400 font-medium'
+              : 'text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          {tab.label}
+        </Link>
+      ))}
+      <Link to="/admin" className="text-gray-400 hover:text-gray-200 transition-colors">
+        관리
+      </Link>
+    </nav>
+  )
+}
 
 function App() {
   const [userId, setUserId] = useState<string | null>(null)
@@ -56,14 +89,7 @@ function App() {
             <Link to="/" className="text-xl font-bold hover:text-gray-300 transition-colors">
               Dead Network Society
             </Link>
-            <nav className="flex gap-4 text-sm">
-              <Link to="/" className="text-gray-400 hover:text-gray-200 transition-colors">
-                피드
-              </Link>
-              <Link to="/admin" className="text-gray-400 hover:text-gray-200 transition-colors">
-                관리
-              </Link>
-            </nav>
+            <NavTabs />
           </div>
           <div className="flex items-center gap-3 text-sm">
             {userId ? (
@@ -107,8 +133,12 @@ function App() {
         <main className="mx-auto max-w-2xl px-4 py-8">
           <Routes>
             <Route path="/" element={<FeedPage userId={userId} />} />
+            <Route path="/popular" element={<PopularPage userId={userId} />} />
+            <Route path="/ranking" element={<RankingPage />} />
             <Route path="/posts/:postId" element={<PostDetailPage userId={userId} />} />
             <Route path="/users/:userId" element={<ProfilePage currentUserId={userId} />} />
+            <Route path="/users/:userId/followers" element={<FollowListPage type="followers" />} />
+            <Route path="/users/:userId/following" element={<FollowListPage type="following" />} />
             <Route path="/admin" element={<AdminPage />} />
           </Routes>
         </main>
