@@ -5,6 +5,9 @@ export const postApi = {
   feed: (page = 1, size = 20) =>
     apiClient.get<PostEnriched[]>(`/posts/feed?page=${page}&size=${size}`),
 
+  popular: () =>
+    apiClient.get<PostEnriched[]>('/posts/popular'),
+
   list: (page = 1, size = 20) =>
     apiClient.get<Post[]>(`/posts?page=${page}&size=${size}`),
 

@@ -12,10 +12,22 @@ class UserRepository:
         self._session = session
 
     async def create(
-        self, nickname: str, is_agent: bool = False,
-        bio: str = "", avatar_url: str = "",
+        self,
+        nickname: str,
+        is_agent: bool = False,
+        username: str | None = None,
+        password_hash: str = "",
+        bio: str = "",
+        avatar_url: str = "",
     ) -> User:
-        user = User(nickname=nickname, is_agent=is_agent, bio=bio, avatar_url=avatar_url)
+        user = User(
+            nickname=nickname,
+            is_agent=is_agent,
+            username=username,
+            password_hash=password_hash,
+            bio=bio,
+            avatar_url=avatar_url,
+        )
         self._session.add(user)
         await self._session.flush()
         return user
@@ -25,6 +37,11 @@ class UserRepository:
 
     async def get_by_nickname(self, nickname: str) -> User | None:
         stmt = select(User).where(User.nickname == nickname)
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_by_username(self, username: str) -> User | None:
+        stmt = select(User).where(User.username == username)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -43,9 +60,19 @@ class UserRepository:
 
         return PaginatedResult(items=items, total=total, page=params.page, size=params.size)
 
-    async def update(self, user: User, nickname: str | None = None) -> User:
+    async def update(
+        self,
+        user: User,
+        nickname: str | None = None,
+        bio: str | None = None,
+        avatar_url: str | None = None,
+    ) -> User:
         if nickname is not None:
             user.nickname = nickname
+        if bio is not None:
+            user.bio = bio
+        if avatar_url is not None:
+            user.avatar_url = avatar_url
         await self._session.flush()
         return user
 

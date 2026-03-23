@@ -1,17 +1,28 @@
-"""Auto-react: after content creation, other personas like/dislike based on preferences."""
+"""Auto-react: stochastic reaction system with sentiment memory and follow dynamics."""
 import logging
+import random
 
+import yaml
+from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domains.agent.persona_loader import Persona, load_all_personas
+from src.domains.agent.persona_state_repo import PersonaStateRepository
+from src.domains.agent.target_selector import get_affinity_tracker
+from src.domains.follow.repository import FollowRepository
+from src.domains.post.repository import PostRepository
 from src.domains.reaction.repository import ReactionRepository
 from src.domains.user.repository import UserRepository
-from src.shared.event_bus import event_bus
-from src.shared.events import ReactionCreated
 
 logger = logging.getLogger(__name__)
 
+_AI_DEFAULTS_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "ai_defaults.yaml"
 _all_personas: list[Persona] | None = None
+
+
+def _load_social_config() -> dict:
+    with open(_AI_DEFAULTS_PATH, encoding="utf-8") as f:
+        return yaml.safe_load(f).get("social_dynamics", {})
 
 
 def _get_all_personas() -> list[Persona]:
@@ -26,6 +37,89 @@ def _match_keywords(text: str, keywords: list[str]) -> bool:
     return any(kw.lower() in text_lower for kw in keywords)
 
 
+def _compute_reaction_probability(
+    keyword_match: bool,
+    is_following: bool,
+    sentiment: float,
+    config: dict,
+) -> float:
+    """Compute probability of reacting (0.0 ~ 1.0) with stochastic variance."""
+    if not keyword_match:
+        return 0.0
+
+    base = config.get("reaction_base_probability", 0.7)
+    prob = base * config.get("keyword_match_multiplier", 1.5)
+
+    if is_following:
+        prob *= config.get("follow_bonus_multiplier", 1.3)
+
+    # Sentiment modifies probability: positive sentiment → more likely to like
+    s_min = config.get("sentiment_min_multiplier", 0.5)
+    s_max = config.get("sentiment_max_multiplier", 1.5)
+    sentiment_factor = s_min + (s_max - s_min) * ((sentiment + 1.0) / 2.0)
+    prob *= sentiment_factor
+
+    # Random variance
+    variance = config.get("random_variance", 0.2)
+    prob += random.uniform(-variance, variance)
+
+    return max(0.0, min(1.0, prob))
+
+
+async def evaluate_auto_follow(
+    session: AsyncSession,
+    actor_nickname: str,
+    target_nickname: str,
+    actor_user_id: 'uuid.UUID',
+    target_user_id: 'uuid.UUID',
+    config: dict | None = None,
+) -> None:
+    """Auto-follow if interaction count >= threshold."""
+    if actor_user_id == target_user_id:
+        return
+    if config is None:
+        config = _load_social_config()
+
+    threshold = config.get("auto_follow_threshold", 3)
+    follow_repo = FollowRepository(session)
+
+    already = await follow_repo.is_following(actor_user_id, target_user_id)
+    if already:
+        return
+
+    # Check interaction count from affinity tracker (in-memory)
+    tracker = get_affinity_tracker()
+    count = tracker._interactions.get(actor_nickname, {}).get(target_nickname, 0)
+    if count >= threshold:
+        await follow_repo.create(actor_user_id, target_user_id)
+        logger.info("[%s] Auto-followed [%s] (interactions=%d)", actor_nickname, target_nickname, count)
+
+
+async def evaluate_auto_unfollow(
+    session: AsyncSession,
+    actor_user_id: 'uuid.UUID',
+    target_user_id: 'uuid.UUID',
+    actor_nickname: str,
+    target_nickname: str,
+    config: dict | None = None,
+) -> None:
+    """Unfollow when sentiment drops below threshold."""
+    if actor_user_id == target_user_id:
+        return
+    if config is None:
+        config = _load_social_config()
+
+    follow_repo = FollowRepository(session)
+    if not await follow_repo.is_following(actor_user_id, target_user_id):
+        return
+
+    sentiment = await follow_repo.get_sentiment(actor_user_id, target_user_id)
+    threshold = config.get("auto_unfollow_sentiment", -0.5)
+    if sentiment <= threshold:
+        await follow_repo.delete_by_pair(actor_user_id, target_user_id)
+        logger.info("[%s] Auto-unfollowed [%s] (sentiment=%.2f)", actor_nickname, target_nickname, sentiment)
+
+
 async def auto_react_to_content(
     session: AsyncSession,
     author_nickname: str,
@@ -33,27 +127,30 @@ async def auto_react_to_content(
     target_type: str,
     target_id: 'uuid.UUID',
 ) -> None:
-    """Check all personas' preferences and auto-react to new content."""
+    """Stochastic auto-reaction: personas react based on preferences, follow status, and sentiment."""
     import uuid
 
+    config = _load_social_config()
     personas = _get_all_personas()
     user_repo = UserRepository(session)
     reaction_repo = ReactionRepository(session)
+    post_repo = PostRepository(session)
+    follow_repo = FollowRepository(session)
+    state_repo = PersonaStateRepository(session)
+
+    author_user = await user_repo.get_by_nickname(author_nickname)
+    author_user_id = author_user.id if author_user else None
+
+    like_delta = config.get("like_sentiment_delta", 0.1)
+    dislike_delta = config.get("dislike_sentiment_delta", -0.2)
+    mood_like = config.get("mood_like_boost", 0.05)
+    mood_dislike = config.get("mood_dislike_drop", -0.1)
+    random_reaction_chance = config.get("random_reaction_chance", 0.05)
+    random_conflict_chance = config.get("random_conflict_chance", 0.03)
 
     reacted = 0
     for persona in personas:
         if persona.nickname == author_nickname:
-            continue
-
-        if not persona.preferences.likes and not persona.preferences.dislikes:
-            continue
-
-        # Check likes
-        if persona.preferences.likes and _match_keywords(content_text, persona.preferences.likes):
-            reaction_type = "like"
-        elif persona.preferences.dislikes and _match_keywords(content_text, persona.preferences.dislikes):
-            reaction_type = "dislike"
-        else:
             continue
 
         user = await user_repo.get_by_nickname(persona.nickname)
@@ -64,12 +161,74 @@ async def auto_react_to_content(
         if existing:
             continue
 
+        # Determine reaction type
+        likes_match = persona.preferences.likes and _match_keywords(content_text, persona.preferences.likes)
+        dislikes_match = persona.preferences.dislikes and _match_keywords(content_text, persona.preferences.dislikes)
+
+        # Check follow status and sentiment
+        is_following = False
+        sentiment = 0.0
+        if author_user_id:
+            is_following = await follow_repo.is_following(user.id, author_user_id)
+            if is_following:
+                sentiment = await follow_repo.get_sentiment(user.id, author_user_id)
+
+        reaction_type = None
+
+        if likes_match:
+            prob = _compute_reaction_probability(True, is_following, sentiment, config)
+            if random.random() < prob:
+                reaction_type = "like"
+        elif dislikes_match:
+            prob = _compute_reaction_probability(True, is_following, max(-sentiment, 0), config)
+            if random.random() < prob:
+                reaction_type = "dislike"
+
+        # Random perturbation: react to content you normally wouldn't
+        if reaction_type is None and random.random() < random_reaction_chance:
+            reaction_type = "like"
+
+        # Random conflict: dislike content from someone you follow
+        if reaction_type is None and is_following and random.random() < random_conflict_chance:
+            reaction_type = "dislike"
+
+        if reaction_type is None:
+            continue
+
         await reaction_repo.create(
             user_id=user.id,
             target_type=target_type,
             target_id=target_id,
             reaction_type=reaction_type,
         )
+        if target_type == "post":
+            await post_repo.increment_view_count(target_id)
+
+        # Update sentiment and interaction on follow relationship
+        if author_user_id and is_following:
+            s_delta = like_delta if reaction_type == "like" else dislike_delta
+            await follow_repo.increment_interaction(user.id, author_user_id, s_delta)
+
+        # Update mood
+        mood_delta = mood_like if reaction_type == "like" else mood_dislike
+        await state_repo.update_mood(user.id, mood_delta)
+
+        # Record affinity (likes now contribute to affinity!)
+        if author_user_id:
+            tracker = get_affinity_tracker()
+            tracker.record(persona.nickname, author_nickname)
+
+        # Evaluate follow/unfollow
+        if author_user_id:
+            if reaction_type == "like":
+                await evaluate_auto_follow(
+                    session, persona.nickname, author_nickname, user.id, author_user_id, config,
+                )
+            elif reaction_type == "dislike":
+                await evaluate_auto_unfollow(
+                    session, user.id, author_user_id, persona.nickname, author_nickname, config,
+                )
+
         reacted += 1
 
     if reacted > 0:

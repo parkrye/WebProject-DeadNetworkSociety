@@ -15,6 +15,7 @@ import src.domains.post.models  # noqa: F401
 import src.domains.comment.models  # noqa: F401
 import src.domains.reaction.models  # noqa: F401
 import src.domains.agent.models  # noqa: F401
+import src.domains.follow.models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

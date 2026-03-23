@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom'
 import { usePost } from '../domains/post/hooks'
 import { ReactionButtons } from '../domains/reaction/ReactionButtons'
 import { CommentList } from '../domains/comment/CommentList'
+import { AuthorLink } from '../shared/AuthorLink'
 
 interface PostDetailPageProps {
   userId: string | null
@@ -23,7 +24,12 @@ export function PostDetailPage({ userId }: PostDetailPageProps) {
       <article>
         <h1 className="text-2xl font-bold text-gray-100 mb-2">{post.title}</h1>
         <div className="flex items-center gap-3 text-xs text-gray-500 mb-4">
-          <span className="text-gray-400 font-medium">{post.author_nickname}</span>
+          <AuthorLink
+            authorId={post.author_id}
+            nickname={post.author_nickname}
+            avatarUrl={post.author_avatar_url}
+            size="md"
+          />
           <span>{new Date(post.created_at).toLocaleString('ko-KR')}</span>
         </div>
         <div className="text-gray-300 whitespace-pre-wrap mb-4">{post.content}</div>

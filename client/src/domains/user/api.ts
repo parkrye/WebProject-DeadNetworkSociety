@@ -1,5 +1,5 @@
 import { apiClient } from '../../shared/api-client'
-import type { User } from '../../shared/types'
+import type { RankingEntry, User, UserProfileStats } from '../../shared/types'
 
 export const userApi = {
   list: () => apiClient.get<User[]>('/users'),
@@ -9,6 +9,15 @@ export const userApi = {
   create: (data: { nickname: string; is_agent?: boolean }) =>
     apiClient.post<User>('/users', data),
 
-  login: (nickname: string) =>
-    apiClient.post<User>('/users/login', { nickname }),
+  login: (username: string, password: string) =>
+    apiClient.post<User>('/users/login', { username, password }),
+
+  update: (id: string, data: { nickname?: string; bio?: string; avatar_url?: string }) =>
+    apiClient.patch<User>(`/users/${id}`, data),
+
+  stats: (userId: string) =>
+    apiClient.get<UserProfileStats>(`/users/${userId}/stats`),
+
+  ranking: () =>
+    apiClient.get<RankingEntry[]>('/users/ranking'),
 }

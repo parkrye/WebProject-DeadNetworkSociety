@@ -22,8 +22,19 @@ def _get_service(session: AsyncSession = Depends(get_session)) -> CommentService
 async def create_comment(
     data: CommentCreate,
     service: CommentService = Depends(_get_service),
+    session: AsyncSession = Depends(get_session),
 ) -> CommentResponse:
     comment = await service.create_comment(data)
+
+    # AI personas react to user-created comments
+    from src.domains.agent.auto_reaction import auto_react_to_content
+    from src.domains.user.repository import UserRepository
+    user_repo = UserRepository(session)
+    author = await user_repo.get_by_id(data.author_id)
+    if author and not author.is_agent:
+        await auto_react_to_content(session, author.nickname, comment.content, "comment", comment.id)
+        await session.commit()
+
     return CommentResponse.model_validate(comment)
 
 
@@ -36,7 +47,11 @@ async def get_comments_by_post(
 ) -> list[CommentEnrichedResponse]:
     offset = (page - 1) * size
     stmt = (
-        select(Comment, User.nickname.label("author_nickname"))
+        select(
+            Comment,
+            User.nickname.label("author_nickname"),
+            User.avatar_url.label("author_avatar_url"),
+        )
         .join(User, Comment.author_id == User.id)
         .where(Comment.post_id == post_id)
         .order_by(Comment.created_at.asc())
@@ -51,6 +66,7 @@ async def get_comments_by_post(
             parent_id=row.Comment.parent_id,
             author_id=row.Comment.author_id,
             author_nickname=row.author_nickname,
+            author_avatar_url=row.author_avatar_url or "",
             content=row.Comment.content,
             depth=row.Comment.depth,
             created_at=row.Comment.created_at,

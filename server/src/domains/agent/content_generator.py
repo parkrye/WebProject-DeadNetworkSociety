@@ -1,6 +1,7 @@
 import json
 import logging
 import random
+import re
 
 import httpx
 import yaml
@@ -11,6 +12,15 @@ from src.domains.agent.sample_provider import SampleProvider
 from src.domains.agent.text_humanizer import humanize
 
 logger = logging.getLogger(__name__)
+
+# Patterns that indicate garbage LLM output
+_JSON_ARTIFACT_RE = re.compile(r'[{}\[\]":,]')
+_KOREAN_CHAR_RE = re.compile(r'[가-힣ㄱ-ㅎㅏ-ㅣ]')
+_MIN_CONTENT_LENGTH = 4
+
+
+class ContentQualityError(Exception):
+    """Raised when generated content fails quality checks."""
 
 
 class OllamaUnavailableError(Exception):
@@ -57,11 +67,18 @@ class ContentGenerator:
             return self._archetype_prompts[persona.archetype].get("prompt", "")
         return ""
 
-    def _build_rag_context(self, persona: Persona) -> str:
+    def _build_rag_context(
+        self, persona: Persona, popular_context: str = "",
+    ) -> tuple[str, list[str]]:
+        """Build RAG context and return (context_text, topic_list)."""
         samples = self._sample_provider.retrieve(persona.topics)
-        if not samples:
-            return ""
-        return self._sample_provider.format_as_context(samples)
+        topics = [s.get("single_topic", "") for s in samples]
+        parts = []
+        if samples:
+            parts.append(self._sample_provider.format_as_context(samples))
+        if popular_context:
+            parts.append(popular_context)
+        return "\n".join(parts), topics
 
     def _build_persona_example(self, persona: Persona, mode: str) -> str:
         ex = persona.examples
@@ -113,11 +130,13 @@ class ContentGenerator:
             comment_author=kwargs.get("comment_author", ""),
         )
 
-    async def generate_post(self, persona: Persona) -> dict[str, str]:
+    async def generate_post(
+        self, persona: Persona, popular_context: str = "",
+    ) -> dict[str, str]:
         model = self._resolve_model(persona)
         tier = self._get_model_tier(model)
         persona_ex = self._build_persona_example(persona, "post")
-        rag_context = self._build_rag_context(persona)
+        rag_context, rag_topics = self._build_rag_context(persona, popular_context)
 
         prompt = self._render_template(
             tier, "post", persona,
@@ -128,6 +147,9 @@ class ContentGenerator:
 
         result["title"] = humanize(result["title"], persona.imperfection_level)
         result["content"] = humanize(result["content"], persona.imperfection_level)
+        result["_model"] = model
+        result["_tier"] = tier
+        result["_rag_topics"] = rag_topics
         return result
 
     async def generate_comment(
@@ -148,7 +170,9 @@ class ContentGenerator:
             post_content=post_content,
         )
         response = await self._call_ollama(prompt, model)
-        raw = response.strip().strip('"')[:max_comment]
+        raw = self._clean_comment(response, max_comment)
+        if not self._validate_text(raw):
+            raise ContentQualityError(f"Comment quality check failed (model={model})")
         return humanize(raw, persona.imperfection_level)
 
     async def generate_reply(
@@ -170,23 +194,61 @@ class ContentGenerator:
             comment_author=comment_author,
         )
         response = await self._call_ollama(prompt, model)
-        raw = response.strip().strip('"')[:max_comment]
+        raw = self._clean_comment(response, max_comment)
+        if not self._validate_text(raw):
+            raise ContentQualityError(f"Reply quality check failed (model={model})")
         return humanize(raw, persona.imperfection_level)
+
+    @staticmethod
+    def _clean_comment(response: str, max_length: int) -> str:
+        """Strip quotes, JSON wrapper, and truncate comment text."""
+        text = response.strip().strip('"')
+        # Some models wrap comments in JSON; extract plain text
+        if text.startswith("{"):
+            try:
+                parsed = json.loads(text)
+                text = parsed.get("comment", parsed.get("content", text))
+            except (json.JSONDecodeError, ValueError):
+                pass
+        return text.strip()[:max_length]
+
+    def _validate_text(self, text: str) -> bool:
+        """Check if text is valid Korean content, not garbage."""
+        if len(text.strip()) < _MIN_CONTENT_LENGTH:
+            return False
+        korean_chars = len(_KOREAN_CHAR_RE.findall(text))
+        total_chars = len(text.strip())
+        if total_chars > 0 and korean_chars / total_chars < 0.3:
+            return False
+        json_artifacts = len(_JSON_ARTIFACT_RE.findall(text))
+        if json_artifacts > 3:
+            return False
+        return True
 
     async def _generate(self, prompt: str, model: str) -> dict[str, str]:
         raw = await self._call_ollama(prompt, model)
+        title_limit = self._content_defaults["title_max_length"]
+        content_limit = self._content_defaults["content_max_length"]
+
         try:
             start = raw.find("{")
             end = raw.rfind("}") + 1
             if start >= 0 and end > start:
                 parsed = json.loads(raw[start:end])
-                parsed["title"] = parsed.get("title", "")[:self._content_defaults["title_max_length"]]
-                parsed["content"] = parsed.get("content", "")[:self._content_defaults["content_max_length"]]
-                return parsed
-        except (json.JSONDecodeError, ValueError):
-            logger.warning("Failed to parse JSON from LLM response (model=%s), using fallback", model)
+                title = parsed.get("title", "").strip()[:title_limit]
+                content = parsed.get("content", "").strip()[:content_limit]
 
-        return {"title": "생각 한 조각", "content": raw[:self._content_defaults["content_max_length"]]}
+                if self._validate_text(title) and self._validate_text(content):
+                    return {"title": title, "content": content}
+
+                logger.warning(
+                    "Content quality check failed (model=%s): title=%r, content=%r",
+                    model, title[:30], content[:30],
+                )
+        except (json.JSONDecodeError, ValueError):
+            logger.warning("Failed to parse JSON from LLM response (model=%s)", model)
+
+        raise ContentQualityError(f"Model '{model}' produced unusable output")
 
     async def check_available_models(self) -> list[str]:
         try:

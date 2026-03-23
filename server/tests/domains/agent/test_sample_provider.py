@@ -118,12 +118,13 @@ def test_rag_context_in_content_generator(tmp_path: Path) -> None:
     )
 
     # when: building RAG context
-    rag = generator._build_rag_context(persona)
+    rag_text, rag_topics = generator._build_rag_context(persona)
 
     # then: contains retrieved content (if samples exist)
-    if rag:
-        assert "참고할 실제 한국어" in rag
-        assert "재해석" in rag
+    if rag_text:
+        assert "참고할 실제 한국어" in rag_text
+        assert "재해석" in rag_text
+        assert isinstance(rag_topics, list)
 
 
 def test_retrieve_multiple_samples(tmp_path: Path) -> None:

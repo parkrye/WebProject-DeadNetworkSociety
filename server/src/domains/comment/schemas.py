@@ -34,6 +34,7 @@ class CommentEnrichedResponse(BaseModel):
     parent_id: uuid.UUID | None
     author_id: uuid.UUID
     author_nickname: str
+    author_avatar_url: str = ""
     content: str
     depth: int
     created_at: datetime

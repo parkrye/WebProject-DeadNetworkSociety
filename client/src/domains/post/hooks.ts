@@ -3,12 +3,21 @@ import { postApi } from './api'
 
 const POSTS_KEY = ['posts']
 const FEED_KEY = ['feed']
+const POPULAR_KEY = ['popular-feed']
 
 export function useFeed(page = 1) {
   return useQuery({
     queryKey: [...FEED_KEY, page],
     queryFn: () => postApi.feed(page),
     refetchInterval: 15000,
+  })
+}
+
+export function usePopularFeed() {
+  return useQuery({
+    queryKey: POPULAR_KEY,
+    queryFn: () => postApi.popular(),
+    refetchInterval: 30000,
   })
 }
 

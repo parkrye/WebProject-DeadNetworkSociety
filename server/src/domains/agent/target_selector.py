@@ -9,9 +9,19 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
 
+import yaml
+from pathlib import Path
+
 from src.domains.agent.persona_loader import Persona
 
 logger = logging.getLogger(__name__)
+
+_AI_DEFAULTS_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "ai_defaults.yaml"
+
+
+def _load_selection_config() -> dict:
+    with open(_AI_DEFAULTS_PATH, encoding="utf-8") as f:
+        return yaml.safe_load(f).get("target_selection", {})
 
 # Topic keyword mapping: English topic -> Korean keywords for text matching
 TOPIC_KEYWORDS: dict[str, list[str]] = {
@@ -73,26 +83,23 @@ TOPIC_KEYWORDS: dict[str, list[str]] = {
 TOPIC_MATCH_THRESHOLD = 1
 
 # Weight multipliers
-TOPIC_WEIGHT = 3.0
-ENGAGEMENT_WEIGHT = 1.5
-AFFINITY_WEIGHT = 2.0
-BASE_WEIGHT = 1.0
-
-
 @dataclass
 class PostCandidate:
     post: object  # Post model
     topic_score: float = 0.0
     engagement_score: float = 0.0
     affinity_score: float = 0.0
+    follow_score: float = 0.0
+    sentiment_score: float = 0.0
 
-    @property
-    def total_weight(self) -> float:
+    def total_weight(self, cfg: dict) -> float:
         return (
-            BASE_WEIGHT
-            + self.topic_score * TOPIC_WEIGHT
-            + self.engagement_score * ENGAGEMENT_WEIGHT
-            + self.affinity_score * AFFINITY_WEIGHT
+            cfg.get("base_weight", 1.0)
+            + self.topic_score * cfg.get("topic_weight", 3.0)
+            + self.engagement_score * cfg.get("engagement_weight", 1.5)
+            + self.affinity_score * cfg.get("affinity_weight", 2.0)
+            + self.follow_score * cfg.get("follow_weight", 2.5)
+            + self.sentiment_score * cfg.get("sentiment_weight", 1.5)
         )
 
 
@@ -165,21 +172,14 @@ def select_post(
     posts: list,
     author_nicknames: dict[uuid.UUID, str] | None = None,
     engagement_data: dict[uuid.UUID, tuple[int, int, int]] | None = None,
+    following_ids: set[uuid.UUID] | None = None,
+    sentiments: dict[uuid.UUID, float] | None = None,
 ) -> object | None:
-    """Select a post with weighted probability based on topic, engagement, and affinity.
-
-    Args:
-        persona: The acting persona.
-        posts: List of Post objects.
-        author_nicknames: {post.author_id: nickname} for affinity lookup.
-        engagement_data: {post.id: (comment_count, like_count, dislike_count)}.
-
-    Returns:
-        Selected Post object, or None if no posts available.
-    """
+    """Select a post with weighted probability based on topic, engagement, affinity, follow, and sentiment."""
     if not posts:
         return None
 
+    cfg = _load_selection_config()
     candidates: list[PostCandidate] = []
     tracker = get_affinity_tracker()
 
@@ -199,16 +199,23 @@ def select_post(
                 candidate.engagement_score = compute_engagement_score(c, l, d)
 
         # Affinity score
-        if author_nicknames:
-            author_id = getattr(post, "author_id", None)
-            if author_id and author_id in author_nicknames:
-                author_nick = author_nicknames[author_id]
-                candidate.affinity_score = tracker.get_affinity(persona.nickname, author_nick)
+        author_id = getattr(post, "author_id", None)
+        if author_nicknames and author_id and author_id in author_nicknames:
+            author_nick = author_nicknames[author_id]
+            candidate.affinity_score = tracker.get_affinity(persona.nickname, author_nick)
+
+        # Follow score
+        if following_ids and author_id and author_id in following_ids:
+            candidate.follow_score = 1.0
+
+        # Sentiment score (positive sentiment → more likely to interact)
+        if sentiments and author_id and author_id in sentiments:
+            candidate.sentiment_score = sentiments[author_id]
 
         candidates.append(candidate)
 
     # Weighted random selection
-    weights = [c.total_weight for c in candidates]
+    weights = [max(0.1, c.total_weight(cfg)) for c in candidates]
     selected = random.choices(candidates, weights=weights, k=1)[0]
     return selected.post
 
@@ -222,17 +229,20 @@ def select_comment(
     if not comments:
         return None
 
+    cfg = _load_selection_config()
     tracker = get_affinity_tracker()
+    base = cfg.get("base_weight", 1.0)
+    aff_w = cfg.get("affinity_weight", 2.0)
     weights: list[float] = []
 
     for comment in comments:
-        weight = BASE_WEIGHT
+        weight = base
         if author_nicknames:
             author_id = getattr(comment, "author_id", None)
             if author_id and author_id in author_nicknames:
                 author_nick = author_nicknames[author_id]
-                weight += tracker.get_affinity(persona.nickname, author_nick) * AFFINITY_WEIGHT
-        weights.append(weight)
+                weight += tracker.get_affinity(persona.nickname, author_nick) * aff_w
+        weights.append(max(0.1, weight))
 
     selected = random.choices(comments, weights=weights, k=1)[0]
     return selected

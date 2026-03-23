@@ -6,13 +6,13 @@ from pydantic import BaseModel, Field
 
 class PostCreate(BaseModel):
     author_id: uuid.UUID
-    title: str = Field(min_length=1, max_length=200)
-    content: str = Field(min_length=1, max_length=5000)
+    title: str = Field(min_length=1, max_length=30)
+    content: str = Field(min_length=1, max_length=140)
 
 
 class PostUpdate(BaseModel):
-    title: str | None = Field(default=None, min_length=1, max_length=200)
-    content: str | None = Field(default=None, min_length=1, max_length=5000)
+    title: str | None = Field(default=None, min_length=1, max_length=30)
+    content: str | None = Field(default=None, min_length=1, max_length=140)
 
 
 class PostResponse(BaseModel):
@@ -37,5 +37,6 @@ class PostEnrichedResponse(BaseModel):
     dislike_count: int
     comment_count: int
     view_count: int = 0
+    popularity_score: float | None = None
     created_at: datetime
     updated_at: datetime

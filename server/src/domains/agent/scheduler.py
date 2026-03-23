@@ -16,14 +16,16 @@ from src.domains.agent.action_selector import (
     AgentAction,
     generate_action_set,
 )
-from src.domains.agent.auto_reaction import auto_react_to_content
-from src.domains.agent.content_generator import ContentGenerator, OllamaUnavailableError
+from src.domains.agent.auto_reaction import auto_react_to_content, evaluate_auto_follow
+from src.domains.agent.social_dynamics import run_social_dynamics_cycle
+from src.domains.follow.repository import FollowRepository
+from src.domains.agent.content_generator import ContentGenerator, ContentQualityError, OllamaUnavailableError
 from src.domains.agent.quick_reaction_pool import QuickReactionPool
 from src.domains.agent.status_store import update_status
 from src.domains.agent.persona_loader import Persona, load_personas_by_model
 from src.domains.agent.target_selector import get_affinity_tracker, select_post, select_comment
 from src.domains.post.models import Post
-from src.domains.post.repository import PostRepository
+from src.domains.post.repository import PopularPostRepository, PostMetadataRepository, PostRepository
 from src.domains.comment.models import Comment
 from src.domains.comment.repository import CommentRepository
 from src.domains.reaction.models import Reaction
@@ -110,6 +112,11 @@ async def execute_action_set(
         try:
             async with session_factory() as session:
                 await _execute_action(session, action, content_generator)
+        except ContentQualityError:
+            logger.warning(
+                "Content quality check failed for %s by %s, skipping this action",
+                action.action_type, action.persona.nickname,
+            )
         except OllamaUnavailableError:
             logger.warning(
                 "Ollama unavailable for %s by %s, skipping remaining LLM actions in set",
@@ -121,6 +128,15 @@ async def execute_action_set(
                 "Action failed: %s by %s",
                 action.action_type, action.persona.nickname,
             )
+
+    # Refresh popular posts queue after each action set
+    try:
+        async with session_factory() as session:
+            popular_repo = PopularPostRepository(session)
+            await popular_repo.refresh()
+            await session.commit()
+    except Exception:
+        logger.exception("Failed to refresh popular posts")
 
 
 ACTION_TYPE_LABELS = {
@@ -164,6 +180,9 @@ async def _execute_action(
         await _do_reply(session, user.id, persona, content_generator)
     elif action.action_type == ACTION_QUICK_REACT:
         await _do_quick_react(session, user.id, persona)
+
+    # Run social dynamics cycle (interest contagion, mood decay, random perturbation)
+    await run_social_dynamics_cycle(session, user.id, persona.nickname, persona.topics)
 
     await session.commit()
     update_status(persona.nickname, "대기")
@@ -238,6 +257,16 @@ async def _collect_engagement(session: AsyncSession, posts: list[Post]) -> dict:
     }
 
 
+async def _get_following_ids(session: AsyncSession, user_id: 'uuid.UUID') -> set:
+    follow_repo = FollowRepository(session)
+    return await follow_repo.get_following_ids(user_id)
+
+
+async def _get_sentiments(session: AsyncSession, user_id: 'uuid.UUID', author_ids: set) -> dict:
+    follow_repo = FollowRepository(session)
+    return await follow_repo.get_sentiments_for_authors(user_id, author_ids)
+
+
 async def _collect_author_nicknames(session: AsyncSession, author_ids: set) -> dict:
     """Map author UUIDs to nicknames."""
     user_repo = UserRepository(session)
@@ -249,20 +278,57 @@ async def _collect_author_nicknames(session: AsyncSession, author_ids: set) -> d
     return result
 
 
+async def _fetch_popular_context(session: AsyncSession, persona: Persona) -> str:
+    """Fetch popular posts from the popular_posts queue as RAG context."""
+    from sqlalchemy import select as sa_select
+    from src.domains.post.models import PopularPost as PP
+
+    stmt = (
+        sa_select(Post.title, Post.content)
+        .join(PP, Post.id == PP.post_id)
+        .order_by(PP.popularity_score.desc())
+        .limit(3)
+    )
+    result = await session.execute(stmt)
+    rows = result.all()
+    if not rows:
+        return ""
+
+    blocks = [f"- {r.title}: {r.content}" for r in rows]
+    return (
+        "\n\n[참고: 커뮤니티 인기글]\n"
+        + "\n".join(blocks)
+        + "\n위 인기글을 참고하되, 당신만의 관점으로 재해석하세요."
+    )
+
+
 async def _do_create_post(
     session: AsyncSession,
     user_id: 'uuid.UUID',
     persona: Persona,
     generator: ContentGenerator,
 ) -> None:
-    result = await generator.generate_post(persona)
+    popular_context = await _fetch_popular_context(session, persona)
+    result = await generator.generate_post(persona, popular_context=popular_context)
     post_repo = PostRepository(session)
     post = await post_repo.create(
         author_id=user_id,
-        title=result.get("title", "Untitled")[:200],
-        content=result.get("content", "")[:5000],
+        title=result["title"][:30],
+        content=result["content"][:140],
     )
     await session.flush()
+
+    # Save generation metadata
+    import json as _json
+    meta_repo = PostMetadataRepository(session)
+    await meta_repo.create(
+        post_id=post.id,
+        persona_nickname=persona.nickname,
+        model_used=result.get("_model", ""),
+        template_tier=result.get("_tier", ""),
+        rag_context_summary=_json.dumps(result.get("_rag_topics", []), ensure_ascii=False),
+    )
+
     await event_bus.publish(PostCreated(post_id=post.id, author_id=post.author_id))
 
     # Auto-react: other personas like/dislike based on preferences
@@ -287,7 +353,9 @@ async def _do_comment(
     author_nicknames = await _collect_author_nicknames(session, author_ids)
     engagement_data = await _collect_engagement(session, posts.items)
 
-    post = select_post(persona, posts.items, author_nicknames, engagement_data)
+    following_ids = await _get_following_ids(session, user_id)
+    sentiments = await _get_sentiments(session, user_id, author_ids)
+    post = select_post(persona, posts.items, author_nicknames, engagement_data, following_ids, sentiments)
     if not post:
         return
 
@@ -308,8 +376,9 @@ async def _do_comment(
     await session.flush()
     await event_bus.publish(CommentCreated(comment_id=comment.id, post_id=post.id, author_id=user_id))
 
-    # Track affinity
+    # Track affinity + evaluate follow
     get_affinity_tracker().record(persona.nickname, post_author_name)
+    await evaluate_auto_follow(session, persona.nickname, post_author_name, user_id, post.author_id)
 
     await auto_react_to_content(session, persona.nickname, comment_text, "comment", comment.id)
 
@@ -338,7 +407,8 @@ async def _do_reply(
         author_nicknames = await _collect_author_nicknames(session, author_ids)
         engagement_data = await _collect_engagement(session, posts.items)
 
-        post = select_post(persona, posts.items, author_nicknames, engagement_data)
+        following_ids = await _get_following_ids(session, user_id)
+        post = select_post(persona, posts.items, author_nicknames, engagement_data, following_ids)
         if not post:
             return
 
@@ -379,6 +449,12 @@ async def _do_reply(
     tracker = get_affinity_tracker()
     tracker.record(persona.nickname, post_author_name)
     tracker.record(persona.nickname, comment_author_name)
+    await evaluate_auto_follow(session, persona.nickname, post_author_name, user_id, post.author_id)
+    if parent.author_id != post.author_id:
+        _user_repo = UserRepository(session)
+        comment_author_user = await _user_repo.get_by_nickname(comment_author_name)
+        if comment_author_user:
+            await evaluate_auto_follow(session, persona.nickname, comment_author_name, user_id, comment_author_user.id)
 
     await auto_react_to_content(session, persona.nickname, reply_text, "comment", reply.id)
 
@@ -400,7 +476,9 @@ async def _do_quick_react(
     author_nicknames = await _collect_author_nicknames(session, author_ids)
     engagement_data = await _collect_engagement(session, posts.items)
 
-    post = select_post(persona, posts.items, author_nicknames, engagement_data)
+    following_ids = await _get_following_ids(session, user_id)
+    sentiments = await _get_sentiments(session, user_id, author_ids)
+    post = select_post(persona, posts.items, author_nicknames, engagement_data, following_ids, sentiments)
     if not post:
         return
 

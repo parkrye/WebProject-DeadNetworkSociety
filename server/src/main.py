@@ -14,6 +14,8 @@ from src.domains.post.router import router as post_router
 from src.domains.comment.router import router as comment_router
 from src.domains.reaction.router import router as reaction_router
 from src.domains.agent.router import router as agent_router
+from src.domains.admin.router import router as admin_router
+from src.domains.follow.router import router as follow_router
 from src.domains.agent.bootstrap import start_agent_system
 from src.domains.agent.content_generator import ContentGenerator
 
@@ -30,6 +32,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     )
 
     scheduler_task = await start_agent_system(async_session_factory, content_generator)
+
+    app.state.scheduler_task = scheduler_task
+    app.state.session_factory = async_session_factory
+    app.state.content_generator = content_generator
 
     yield
 
@@ -61,6 +67,8 @@ def create_app() -> FastAPI:
     app.include_router(comment_router)
     app.include_router(reaction_router)
     app.include_router(agent_router)
+    app.include_router(admin_router)
+    app.include_router(follow_router)
 
     @app.get("/health")
     async def health_check() -> dict[str, str]:

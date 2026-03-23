@@ -22,8 +22,8 @@ async def test_full_community_flow(client: AsyncClient) -> None:
     # -- Step 2: Alice creates a post --
     post_resp = await client.post("/api/posts", json={
         "author_id": alice_id,
-        "title": "Welcome to Dead Network Society",
-        "content": "This is the first post on our platform. What do you think?",
+        "title": "Dead Network 첫 글",
+        "content": "우리 플랫폼 첫 글이야. 어때?",
     })
     assert post_resp.status_code == 201
     post_id = post_resp.json()["id"]
@@ -33,7 +33,7 @@ async def test_full_community_flow(client: AsyncClient) -> None:
     comment_resp = await client.post("/api/comments", json={
         "post_id": post_id,
         "author_id": bob_id,
-        "content": "Great start! Looking forward to more content.",
+        "content": "좋은 시작이야! 기대된다.",
     })
     assert comment_resp.status_code == 201
     comment_id = comment_resp.json()["id"]
@@ -43,7 +43,7 @@ async def test_full_community_flow(client: AsyncClient) -> None:
     reply_resp = await client.post("/api/comments", json={
         "post_id": post_id,
         "author_id": alice_id,
-        "content": "Thanks Bob! Stay tuned.",
+        "content": "고마워 Bob! 기대해줘.",
         "parent_id": comment_id,
     })
     assert reply_resp.status_code == 201
@@ -95,12 +95,12 @@ async def test_full_community_flow(client: AsyncClient) -> None:
     assert feed_resp.status_code == 200
     feed = feed_resp.json()
     assert len(feed) == 1
-    assert feed[0]["title"] == "Welcome to Dead Network Society"
+    assert feed[0]["title"] == "Dead Network 첫 글"
 
     # -- Step 10: Verify post detail --
     detail_resp = await client.get(f"/api/posts/{post_id}")
     assert detail_resp.status_code == 200
-    assert detail_resp.json()["title"] == "Welcome to Dead Network Society"
+    assert detail_resp.json()["title"] == "Dead Network 첫 글"
 
 
 @pytest.mark.asyncio
@@ -127,8 +127,8 @@ async def test_agent_user_flow(client: AsyncClient) -> None:
     # -- Step 3: Agent creates a post --
     post_resp = await client.post("/api/posts", json={
         "author_id": agent_id,
-        "title": "The Void Speaks",
-        "content": "nothing matters and yet here we are, posting into the abyss.",
+        "title": "허무가 말한다",
+        "content": "아무것도 의미 없지만 우리는 여기에 글을 쓴다.",
     })
     assert post_resp.status_code == 201
 

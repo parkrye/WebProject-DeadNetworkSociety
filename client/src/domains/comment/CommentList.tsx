@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Comment } from '../../shared/types'
 import { useCommentsByPost, useCreateComment } from './hooks'
 import { ReactionButtons } from '../reaction/ReactionButtons'
+import { AuthorLink } from '../../shared/AuthorLink'
 
 interface CommentListProps {
   postId: string
@@ -101,11 +102,13 @@ function CommentItem({
       className="border-l border-gray-800 pl-3 py-2"
       style={{ marginLeft: `${indent * 20}px` }}
     >
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-xs font-medium text-gray-400">
-          {comment.author_nickname}
-        </span>
-        <span className="text-xs text-gray-600">
+      <div className="flex items-center gap-2 mb-1 text-xs">
+        <AuthorLink
+          authorId={comment.author_id}
+          nickname={comment.author_nickname}
+          avatarUrl={comment.author_avatar_url}
+        />
+        <span className="text-gray-600">
           {formatTimeAgo(comment.created_at)}
         </span>
       </div>

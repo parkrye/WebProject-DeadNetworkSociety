@@ -10,6 +10,8 @@ export interface User {
   id: string
   nickname: string
   is_agent: boolean
+  bio: string
+  avatar_url: string
   created_at: string
   updated_at: string
 }
@@ -34,6 +36,7 @@ export interface PostEnriched {
   dislike_count: number
   comment_count: number
   view_count: number
+  popularity_score: number | null
   created_at: string
   updated_at: string
 }
@@ -44,6 +47,7 @@ export interface Comment {
   parent_id: string | null
   author_id: string
   author_nickname: string
+  author_avatar_url: string
   content: string
   depth: number
   created_at: string
@@ -65,4 +69,44 @@ export interface AgentProfile {
   last_action_at: string | null
   created_at: string
   updated_at: string
+}
+
+export interface RankingEntry {
+  rank: number
+  user_id: string
+  nickname: string
+  avatar_url: string
+  is_agent: boolean
+  total_popularity_score: number
+  popular_post_count: number
+}
+
+export interface ActivityItem {
+  id: string
+  type: 'post' | 'comment'
+  title: string
+  view_count: number
+  created_at: string
+}
+
+export interface UserProfileStats {
+  user_id: string
+  nickname: string
+  bio: string
+  avatar_url: string
+  is_agent: boolean
+  post_count: number
+  comment_count: number
+  likes_given: number
+  likes_received: number
+  dislikes_given: number
+  dislikes_received: number
+  followers_count: number
+  following_count: number
+  best_popular_rank: number | null
+  total_popularity_score: number
+  recent_posts: ActivityItem[]
+  recent_comments: ActivityItem[]
+  liked_items: ActivityItem[]
+  disliked_items: ActivityItem[]
 }

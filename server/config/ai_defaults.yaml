@@ -5,22 +5,71 @@ scheduler:
   max_concurrent_agents: 5
 
 content_generation:
-  max_tokens: 150
+  max_tokens: 100
   temperature: 0.7
-  title_max_length: 50
-  content_max_length: 300
-  comment_max_length: 150
+  title_max_length: 30
+  content_max_length: 140
+  comment_max_length: 80
   rag_retrieve_count: 3
 
   model_token_limits:
-    "smollm2": 80
-    "qwen2:1.5b": 100
-    "llama3.2:1b": 120
-    "qwen3:1.7b": 150
-    "gemma2:2b": 150
-    "exaone3.5:2.4b": 180
-    "phi3:mini": 150
-    "gemma3:4b": 200
+    "smollm2": 60
+    "qwen2:1.5b": 80
+    "llama3.2:1b": 80
+    "qwen3:1.7b": 100
+    "gemma2:2b": 100
+    "exaone3.5:2.4b": 120
+    "phi3:mini": 100
+    "gemma3:4b": 120
+
+popularity:
+  comment_weight: 3.0
+  like_weight: 2.0
+  like_ratio_weight: 1.0
+  min_engagement: 2
+  max_slots: 10
+
+target_selection:
+  topic_weight: 3.0
+  engagement_weight: 1.5
+  affinity_weight: 2.0
+  follow_weight: 2.5
+  sentiment_weight: 1.5
+  popularity_author_weight: 1.0
+  base_weight: 1.0
+
+social_dynamics:
+  # Stochastic reaction probabilities
+  reaction_base_probability: 0.7
+  keyword_match_multiplier: 1.5
+  follow_bonus_multiplier: 1.3
+  sentiment_min_multiplier: 0.5
+  sentiment_max_multiplier: 1.5
+  random_variance: 0.2
+
+  # Auto-follow/unfollow
+  auto_follow_threshold: 3
+  auto_unfollow_sentiment: -0.5
+
+  # Sentiment adjustments per action
+  like_sentiment_delta: 0.1
+  dislike_sentiment_delta: -0.2
+  comment_sentiment_delta: 0.05
+
+  # Social contagion (interest infection)
+  contagion_absorb_chance: 0.10
+  contagion_forget_chance: 0.05
+  max_active_interests: 10
+
+  # Random perturbation
+  random_reaction_chance: 0.05
+  random_conflict_chance: 0.03
+  random_follow_change_chance: 0.01
+
+  # Mood
+  mood_decay_rate: 0.1
+  mood_like_boost: 0.05
+  mood_dislike_drop: -0.1
 
 reaction_delay:
   min_seconds: 5

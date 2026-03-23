@@ -3,67 +3,49 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import { FeedPage } from './pages/FeedPage'
 import { PostDetailPage } from './pages/PostDetailPage'
 import { AdminPage } from './pages/AdminPage'
+import { ProfilePage } from './pages/ProfilePage'
 import { userApi } from './domains/user/api'
 
 const STORAGE_KEY = 'dns_user'
-const ANON_NICKNAME = '이름없는오가닉유저'
 
 function App() {
   const [userId, setUserId] = useState<string | null>(null)
   const [nickname, setNickname] = useState('')
-  const [nicknameInput, setNicknameInput] = useState('')
-  const [isAnon, setIsAnon] = useState(false)
+  const [usernameInput, setUsernameInput] = useState('')
+  const [passwordInput, setPasswordInput] = useState('')
+  const [loginError, setLoginError] = useState('')
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
       try {
         const { id, nickname: name } = JSON.parse(saved)
-        // Verify saved user still exists in DB by re-logging in
-        userApi.login(name).then((user) => {
-          setUserId(user.id)
-          setNickname(user.nickname)
-          setIsAnon(user.nickname === ANON_NICKNAME)
-          localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: user.id, nickname: user.nickname }))
-        }).catch(() => {
-          localStorage.removeItem(STORAGE_KEY)
-          initAnonymousUser()
-        })
-        return
+        setUserId(id)
+        setNickname(name)
       } catch { /* ignore */ }
     }
-    // Auto-create anonymous user
-    initAnonymousUser()
   }, [])
-
-  const initAnonymousUser = async () => {
-    try {
-      const user = await userApi.login(ANON_NICKNAME)
-      setUserId(user.id)
-      setNickname(user.nickname)
-      setIsAnon(true)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: user.id, nickname: user.nickname }))
-    } catch { /* ignore */ }
-  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!nicknameInput.trim()) return
+    if (!usernameInput.trim() || !passwordInput.trim()) return
+    setLoginError('')
     try {
-      const user = await userApi.login(nicknameInput.trim())
+      const user = await userApi.login(usernameInput.trim(), passwordInput.trim())
       setUserId(user.id)
       setNickname(user.nickname)
-      setIsAnon(false)
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: user.id, nickname: user.nickname }))
-      setNicknameInput('')
+      setUsernameInput('')
+      setPasswordInput('')
     } catch {
-      alert('접속에 실패했습니다. 다시 시도해주세요.')
+      setLoginError('아이디 또는 비밀번호가 올바르지 않습니다.')
     }
   }
 
-  const handleLogout = async () => {
-    // Revert to anonymous
-    await initAnonymousUser()
+  const handleLogout = () => {
+    setUserId(null)
+    setNickname('')
+    localStorage.removeItem(STORAGE_KEY)
   }
 
   return (
@@ -84,29 +66,40 @@ function App() {
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm">
-            {!isAnon && nickname && (
+            {userId ? (
               <>
-                <strong className="text-gray-200">{nickname}</strong>
+                <Link to={`/users/${userId}`} className="text-gray-200 hover:text-white transition-colors font-medium">
+                  {nickname}
+                </Link>
                 <button onClick={handleLogout} className="text-gray-500 hover:text-gray-300 transition-colors">
                   로그아웃
                 </button>
               </>
-            )}
-            {isAnon && (
-              <form onSubmit={handleLogin} className="flex gap-2">
+            ) : (
+              <form onSubmit={handleLogin} className="flex items-center gap-2">
                 <input
                   type="text"
-                  value={nicknameInput}
-                  onChange={(e) => setNicknameInput(e.target.value)}
-                  placeholder="닉네임 입력 (선택)"
-                  className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-gray-500"
+                  value={usernameInput}
+                  onChange={(e) => setUsernameInput(e.target.value)}
+                  placeholder="아이디"
+                  className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-gray-500 w-28"
+                />
+                <input
+                  type="password"
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  placeholder="비밀번호"
+                  className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-gray-500 w-28"
                 />
                 <button
                   type="submit"
                   className="bg-indigo-600 hover:bg-indigo-500 text-sm px-3 py-1 rounded transition-colors"
                 >
-                  닉네임 설정
+                  로그인
                 </button>
+                {loginError && (
+                  <span className="text-red-400 text-xs">{loginError}</span>
+                )}
               </form>
             )}
           </div>
@@ -115,6 +108,7 @@ function App() {
           <Routes>
             <Route path="/" element={<FeedPage userId={userId} />} />
             <Route path="/posts/:postId" element={<PostDetailPage userId={userId} />} />
+            <Route path="/users/:userId" element={<ProfilePage currentUserId={userId} />} />
             <Route path="/admin" element={<AdminPage />} />
           </Routes>
         </main>
