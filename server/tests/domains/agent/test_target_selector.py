@@ -1,9 +1,9 @@
+import math
 import uuid
 from dataclasses import dataclass
 
 from src.domains.agent.persona_loader import Persona
 from src.domains.agent.target_selector import (
-    AffinityTracker,
     compute_engagement_score,
     compute_topic_score,
     select_comment,
@@ -26,7 +26,7 @@ class FakeComment:
     content: str
 
 
-def _make_persona(topics: list[str], nickname: str = "테스트봇") -> Persona:
+def _make_persona(topics: list[str], nickname: str = "test_bot") -> Persona:
     return Persona(
         name="test", nickname=nickname,
         writing_style="test", topics=topics, model="llama3",
@@ -125,56 +125,22 @@ def test_select_post_single_item() -> None:
     assert result.id == post.id
 
 
-# --- Affinity tracking ---
-
-def test_affinity_tracker_records_and_retrieves() -> None:
-    tracker = AffinityTracker()
-    tracker.record("봇A", "봇B")
-    tracker.record("봇A", "봇B")
-    tracker.record("봇A", "봇B")
-
-    assert tracker.get_affinity("봇A", "봇B") > 0
-    assert tracker.get_affinity("봇A", "봇C") == 0
-
-
-def test_affinity_tracker_ignores_self() -> None:
-    tracker = AffinityTracker()
-    tracker.record("봇A", "봇A")
-    assert tracker.get_affinity("봇A", "봇A") == 0
-
-
-def test_affinity_tracker_top_partners() -> None:
-    tracker = AffinityTracker()
-    for _ in range(5):
-        tracker.record("봇A", "봇B")
-    for _ in range(3):
-        tracker.record("봇A", "봇C")
-    tracker.record("봇A", "봇D")
-
-    top = tracker.get_top_partners("봇A", limit=2)
-    assert len(top) == 2
-    assert top[0][0] == "봇B"
-    assert top[1][0] == "봇C"
-
+# --- Affinity-based selection (DB affinities dict) ---
 
 def test_select_post_with_affinity() -> None:
-    persona = _make_persona(["daily life"], nickname="봇A")
+    persona = _make_persona(["daily life"], nickname="botA")
 
     friend_id = uuid.uuid4()
     stranger_id = uuid.uuid4()
-    friend_post = FakePost(id=uuid.uuid4(), author_id=friend_id, title="일상", content="오늘")
-    stranger_post = FakePost(id=uuid.uuid4(), author_id=stranger_id, title="일상", content="오늘")
+    friend_post = FakePost(id=uuid.uuid4(), author_id=friend_id, title="daily", content="today")
+    stranger_post = FakePost(id=uuid.uuid4(), author_id=stranger_id, title="daily", content="today")
 
-    author_nicks = {friend_id: "봇B", stranger_id: "봇C"}
-
-    # Build affinity
-    from src.domains.agent.target_selector import _affinity_tracker
-    for _ in range(20):
-        _affinity_tracker.record("봇A", "봇B")
+    # Simulate DB affinity: 20 interactions with friend, 0 with stranger
+    affinities = {friend_id: math.log1p(20)}
 
     selections = {"friend": 0, "stranger": 0}
     for _ in range(200):
-        result = select_post(persona, [friend_post, stranger_post], author_nicknames=author_nicks)
+        result = select_post(persona, [friend_post, stranger_post], affinities=affinities)
         if result.id == friend_post.id:
             selections["friend"] += 1
         else:
@@ -186,22 +152,18 @@ def test_select_post_with_affinity() -> None:
 # --- Comment selection with affinity ---
 
 def test_select_comment_with_affinity() -> None:
-    persona = _make_persona(["daily life"], nickname="봇X")
+    persona = _make_persona(["daily life"], nickname="botX")
 
     friend_id = uuid.uuid4()
     stranger_id = uuid.uuid4()
-    friend_comment = FakeComment(id=uuid.uuid4(), author_id=friend_id, content="좋은 글")
-    stranger_comment = FakeComment(id=uuid.uuid4(), author_id=stranger_id, content="좋은 글")
+    friend_comment = FakeComment(id=uuid.uuid4(), author_id=friend_id, content="good post")
+    stranger_comment = FakeComment(id=uuid.uuid4(), author_id=stranger_id, content="good post")
 
-    author_nicks = {friend_id: "봇Y", stranger_id: "봇Z"}
-
-    from src.domains.agent.target_selector import _affinity_tracker
-    for _ in range(20):
-        _affinity_tracker.record("봇X", "봇Y")
+    affinities = {friend_id: math.log1p(20)}
 
     selections = {"friend": 0, "stranger": 0}
     for _ in range(200):
-        result = select_comment(persona, [friend_comment, stranger_comment], author_nicknames=author_nicks)
+        result = select_comment(persona, [friend_comment, stranger_comment], affinities=affinities)
         if result.id == friend_comment.id:
             selections["friend"] += 1
         else:

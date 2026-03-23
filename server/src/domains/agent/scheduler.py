@@ -18,12 +18,12 @@ from src.domains.agent.action_selector import (
 )
 from src.domains.agent.auto_reaction import auto_react_to_content, evaluate_auto_follow
 from src.domains.agent.social_dynamics import run_social_dynamics_cycle
-from src.domains.follow.repository import FollowRepository
 from src.domains.agent.content_generator import ContentGenerator, ContentQualityError, OllamaUnavailableError
 from src.domains.agent.quick_reaction_pool import QuickReactionPool
 from src.domains.agent.status_store import update_status
 from src.domains.agent.persona_loader import Persona, load_personas_by_model
-from src.domains.agent.target_selector import get_affinity_tracker, select_post, select_comment
+from src.domains.agent.target_selector import select_post, select_comment
+from src.domains.follow.repository import FollowRepository, PersonaRelationshipRepository
 from src.domains.post.models import Post
 from src.domains.post.repository import PopularPostRepository, PostMetadataRepository, PostRepository
 from src.domains.comment.models import Comment
@@ -263,8 +263,13 @@ async def _get_following_ids(session: AsyncSession, user_id: 'uuid.UUID') -> set
 
 
 async def _get_sentiments(session: AsyncSession, user_id: 'uuid.UUID', author_ids: set) -> dict:
-    follow_repo = FollowRepository(session)
-    return await follow_repo.get_sentiments_for_authors(user_id, author_ids)
+    rel_repo = PersonaRelationshipRepository(session)
+    return await rel_repo.get_sentiments_for_authors(user_id, author_ids)
+
+
+async def _get_affinities(session: AsyncSession, user_id: 'uuid.UUID', author_ids: set) -> dict:
+    rel_repo = PersonaRelationshipRepository(session)
+    return await rel_repo.get_affinities_for_authors(user_id, author_ids)
 
 
 async def _collect_author_nicknames(session: AsyncSession, author_ids: set) -> dict:
@@ -355,7 +360,8 @@ async def _do_comment(
 
     following_ids = await _get_following_ids(session, user_id)
     sentiments = await _get_sentiments(session, user_id, author_ids)
-    post = select_post(persona, posts.items, author_nicknames, engagement_data, following_ids, sentiments)
+    affinities = await _get_affinities(session, user_id, author_ids)
+    post = select_post(persona, posts.items, author_nicknames, engagement_data, following_ids, sentiments, affinities)
     if not post:
         return
 
@@ -376,8 +382,9 @@ async def _do_comment(
     await session.flush()
     await event_bus.publish(CommentCreated(comment_id=comment.id, post_id=post.id, author_id=user_id))
 
-    # Track affinity + evaluate follow
-    get_affinity_tracker().record(persona.nickname, post_author_name)
+    # Track affinity in DB + evaluate follow
+    _rel_repo = PersonaRelationshipRepository(session)
+    await _rel_repo.record_interaction(user_id, post.author_id, sentiment_delta=0.05)
     await evaluate_auto_follow(session, persona.nickname, post_author_name, user_id, post.author_id)
 
     await auto_react_to_content(session, persona.nickname, comment_text, "comment", comment.id)
@@ -418,7 +425,8 @@ async def _do_reply(
 
         comment_author_ids = {c.author_id for c in comments.items}
         comment_author_nicks = await _collect_author_nicknames(session, comment_author_ids)
-        parent = select_comment(persona, comments.items, comment_author_nicks)
+        comment_affinities = await _get_affinities(session, user_id, comment_author_ids)
+        parent = select_comment(persona, comments.items, comment_author_nicks, comment_affinities)
         if not parent:
             return
 
@@ -445,10 +453,10 @@ async def _do_reply(
     await session.flush()
     await event_bus.publish(CommentCreated(comment_id=reply.id, post_id=post.id, author_id=user_id))
 
-    # Track affinity for both post author and comment author
-    tracker = get_affinity_tracker()
-    tracker.record(persona.nickname, post_author_name)
-    tracker.record(persona.nickname, comment_author_name)
+    # Track affinity in DB for both post author and comment author
+    _rel_repo = PersonaRelationshipRepository(session)
+    await _rel_repo.record_interaction(user_id, post.author_id, sentiment_delta=0.05)
+    await _rel_repo.record_interaction(user_id, parent.author_id, sentiment_delta=0.05)
     await evaluate_auto_follow(session, persona.nickname, post_author_name, user_id, post.author_id)
     if parent.author_id != post.author_id:
         _user_repo = UserRepository(session)
@@ -478,7 +486,8 @@ async def _do_quick_react(
 
     following_ids = await _get_following_ids(session, user_id)
     sentiments = await _get_sentiments(session, user_id, author_ids)
-    post = select_post(persona, posts.items, author_nicknames, engagement_data, following_ids, sentiments)
+    affinities = await _get_affinities(session, user_id, author_ids)
+    post = select_post(persona, posts.items, author_nicknames, engagement_data, following_ids, sentiments, affinities)
     if not post:
         return
 
@@ -495,9 +504,8 @@ async def _do_quick_react(
     await session.flush()
     await event_bus.publish(CommentCreated(comment_id=comment.id, post_id=post.id, author_id=user_id))
 
-    # Track affinity
-    post_author_name = author_nicknames.get(post.author_id, "")
-    if post_author_name:
-        get_affinity_tracker().record(persona.nickname, post_author_name)
+    # Track affinity in DB
+    _rel_repo = PersonaRelationshipRepository(session)
+    await _rel_repo.record_interaction(user_id, post.author_id, sentiment_delta=0.05)
 
     logger.info("[%s] Quick reaction on post %s: %s", persona.nickname, post.id, reaction_text)

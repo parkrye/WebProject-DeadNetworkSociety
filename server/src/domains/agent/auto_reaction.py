@@ -8,8 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domains.agent.persona_loader import Persona, load_all_personas
 from src.domains.agent.persona_state_repo import PersonaStateRepository
-from src.domains.agent.target_selector import get_affinity_tracker
-from src.domains.follow.repository import FollowRepository
+from src.domains.follow.repository import FollowRepository, PersonaRelationshipRepository
 from src.domains.post.repository import PostRepository
 from src.domains.reaction.repository import ReactionRepository
 from src.domains.user.repository import UserRepository
@@ -87,9 +86,9 @@ async def evaluate_auto_follow(
     if already:
         return
 
-    # Check interaction count from affinity tracker (in-memory)
-    tracker = get_affinity_tracker()
-    count = tracker._interactions.get(actor_nickname, {}).get(target_nickname, 0)
+    # Check interaction count from DB (persistent)
+    rel_repo = PersonaRelationshipRepository(session)
+    count = await rel_repo.get_interaction_count(actor_user_id, target_user_id)
     if count >= threshold:
         await follow_repo.create(actor_user_id, target_user_id)
         logger.info("[%s] Auto-followed [%s] (interactions=%d)", actor_nickname, target_nickname, count)
@@ -113,9 +112,11 @@ async def evaluate_auto_unfollow(
     if not await follow_repo.is_following(actor_user_id, target_user_id):
         return
 
-    sentiment = await follow_repo.get_sentiment(actor_user_id, target_user_id)
+    rel_repo = PersonaRelationshipRepository(session)
+    sentiment = await rel_repo.get_sentiments_for_authors(actor_user_id, {target_user_id})
+    target_sentiment = sentiment.get(target_user_id, 0.0)
     threshold = config.get("auto_unfollow_sentiment", -0.5)
-    if sentiment <= threshold:
+    if target_sentiment <= threshold:
         await follow_repo.delete_by_pair(actor_user_id, target_user_id)
         logger.info("[%s] Auto-unfollowed [%s] (sentiment=%.2f)", actor_nickname, target_nickname, sentiment)
 
@@ -136,6 +137,7 @@ async def auto_react_to_content(
     reaction_repo = ReactionRepository(session)
     post_repo = PostRepository(session)
     follow_repo = FollowRepository(session)
+    rel_repo = PersonaRelationshipRepository(session)
     state_repo = PersonaStateRepository(session)
 
     author_user = await user_repo.get_by_nickname(author_nickname)
@@ -165,13 +167,13 @@ async def auto_react_to_content(
         likes_match = persona.preferences.likes and _match_keywords(content_text, persona.preferences.likes)
         dislikes_match = persona.preferences.dislikes and _match_keywords(content_text, persona.preferences.dislikes)
 
-        # Check follow status and sentiment
+        # Check follow status and sentiment (from persistent relationships)
         is_following = False
         sentiment = 0.0
         if author_user_id:
             is_following = await follow_repo.is_following(user.id, author_user_id)
-            if is_following:
-                sentiment = await follow_repo.get_sentiment(user.id, author_user_id)
+            sents = await rel_repo.get_sentiments_for_authors(user.id, {author_user_id})
+            sentiment = sents.get(author_user_id, 0.0)
 
         reaction_type = None
 
@@ -204,19 +206,19 @@ async def auto_react_to_content(
         if target_type == "post":
             await post_repo.increment_view_count(target_id)
 
-        # Update sentiment and interaction on follow relationship
-        if author_user_id and is_following:
+        # Record interaction in persistent relationship DB
+        if author_user_id:
             s_delta = like_delta if reaction_type == "like" else dislike_delta
-            await follow_repo.increment_interaction(user.id, author_user_id, s_delta)
+            await rel_repo.record_interaction(
+                user.id, author_user_id, reaction_type=reaction_type, sentiment_delta=s_delta,
+            )
+            # Also update follow relationship if following
+            if is_following:
+                await follow_repo.increment_interaction(user.id, author_user_id, s_delta)
 
         # Update mood
         mood_delta = mood_like if reaction_type == "like" else mood_dislike
         await state_repo.update_mood(user.id, mood_delta)
-
-        # Record affinity (likes now contribute to affinity!)
-        if author_user_id:
-            tracker = get_affinity_tracker()
-            tracker.record(persona.nickname, author_nickname)
 
         # Evaluate follow/unfollow
         if author_user_id:

@@ -174,6 +174,7 @@ def select_post(
     engagement_data: dict[uuid.UUID, tuple[int, int, int]] | None = None,
     following_ids: set[uuid.UUID] | None = None,
     sentiments: dict[uuid.UUID, float] | None = None,
+    affinities: dict[uuid.UUID, float] | None = None,
 ) -> object | None:
     """Select a post with weighted probability based on topic, engagement, affinity, follow, and sentiment."""
     if not posts:
@@ -181,7 +182,6 @@ def select_post(
 
     cfg = _load_selection_config()
     candidates: list[PostCandidate] = []
-    tracker = get_affinity_tracker()
 
     for post in posts:
         candidate = PostCandidate(post=post)
@@ -198,11 +198,10 @@ def select_post(
                 c, l, d = engagement_data[post_id]
                 candidate.engagement_score = compute_engagement_score(c, l, d)
 
-        # Affinity score
+        # Affinity score (from persistent DB)
         author_id = getattr(post, "author_id", None)
-        if author_nicknames and author_id and author_id in author_nicknames:
-            author_nick = author_nicknames[author_id]
-            candidate.affinity_score = tracker.get_affinity(persona.nickname, author_nick)
+        if affinities and author_id and author_id in affinities:
+            candidate.affinity_score = affinities[author_id]
 
         # Follow score
         if following_ids and author_id and author_id in following_ids:
@@ -224,24 +223,22 @@ def select_comment(
     persona: Persona,
     comments: list,
     author_nicknames: dict[uuid.UUID, str] | None = None,
+    affinities: dict[uuid.UUID, float] | None = None,
 ) -> object | None:
     """Select a comment for reply with affinity-weighted probability."""
     if not comments:
         return None
 
     cfg = _load_selection_config()
-    tracker = get_affinity_tracker()
     base = cfg.get("base_weight", 1.0)
     aff_w = cfg.get("affinity_weight", 2.0)
     weights: list[float] = []
 
     for comment in comments:
         weight = base
-        if author_nicknames:
-            author_id = getattr(comment, "author_id", None)
-            if author_id and author_id in author_nicknames:
-                author_nick = author_nicknames[author_id]
-                weight += tracker.get_affinity(persona.nickname, author_nick) * aff_w
+        author_id = getattr(comment, "author_id", None)
+        if affinities and author_id and author_id in affinities:
+            weight += affinities[author_id] * aff_w
         weights.append(max(0.1, weight))
 
     selected = random.choices(comments, weights=weights, k=1)[0]
