@@ -21,8 +21,12 @@ from src.domains.agent.content_generator import ContentGenerator, OllamaUnavaila
 from src.domains.agent.quick_reaction_pool import QuickReactionPool
 from src.domains.agent.status_store import update_status
 from src.domains.agent.persona_loader import Persona, load_personas_by_model
+from src.domains.agent.target_selector import get_affinity_tracker, select_post, select_comment
+from src.domains.post.models import Post
 from src.domains.post.repository import PostRepository
+from src.domains.comment.models import Comment
 from src.domains.comment.repository import CommentRepository
+from src.domains.reaction.models import Reaction
 from src.domains.user.repository import UserRepository
 from src.shared.event_bus import event_bus
 from src.shared.events import PostCreated, CommentCreated
@@ -165,6 +169,57 @@ async def _execute_action(
     update_status(persona.nickname, "대기")
 
 
+async def _collect_engagement(session: AsyncSession, posts: list[Post]) -> dict:
+    """Collect comment and reaction counts for posts."""
+    from sqlalchemy import func, select
+    import uuid as _uuid
+
+    post_ids = [p.id for p in posts]
+    if not post_ids:
+        return {}
+
+    # Comment counts
+    comment_stmt = (
+        select(Comment.post_id, func.count().label("cnt"))
+        .where(Comment.post_id.in_(post_ids))
+        .group_by(Comment.post_id)
+    )
+    comment_result = await session.execute(comment_stmt)
+    comment_counts = {row[0]: row[1] for row in comment_result.all()}
+
+    # Reaction counts (likes and dislikes)
+    like_stmt = (
+        select(Reaction.target_id, func.count().label("cnt"))
+        .where(Reaction.target_type == "post", Reaction.target_id.in_(post_ids), Reaction.reaction_type == "like")
+        .group_by(Reaction.target_id)
+    )
+    dislike_stmt = (
+        select(Reaction.target_id, func.count().label("cnt"))
+        .where(Reaction.target_type == "post", Reaction.target_id.in_(post_ids), Reaction.reaction_type == "dislike")
+        .group_by(Reaction.target_id)
+    )
+    like_result = await session.execute(like_stmt)
+    like_counts = {row[0]: row[1] for row in like_result.all()}
+    dislike_result = await session.execute(dislike_stmt)
+    dislike_counts = {row[0]: row[1] for row in dislike_result.all()}
+
+    return {
+        pid: (comment_counts.get(pid, 0), like_counts.get(pid, 0), dislike_counts.get(pid, 0))
+        for pid in post_ids
+    }
+
+
+async def _collect_author_nicknames(session: AsyncSession, author_ids: set) -> dict:
+    """Map author UUIDs to nicknames."""
+    user_repo = UserRepository(session)
+    result = {}
+    for aid in author_ids:
+        user = await user_repo.get_by_id(aid)
+        if user:
+            result[aid] = user.nickname
+    return result
+
+
 async def _do_create_post(
     session: AsyncSession,
     user_id: 'uuid.UUID',
@@ -199,12 +254,15 @@ async def _do_comment(
     if not posts.items:
         return
 
-    post = random.choice(posts.items)
+    author_ids = {p.author_id for p in posts.items}
+    author_nicknames = await _collect_author_nicknames(session, author_ids)
+    engagement_data = await _collect_engagement(session, posts.items)
 
-    # Get post author nickname
-    user_repo = UserRepository(session)
-    post_author = await user_repo.get_by_id(post.author_id)
-    post_author_name = post_author.nickname if post_author else "알 수 없음"
+    post = select_post(persona, posts.items, author_nicknames, engagement_data)
+    if not post:
+        return
+
+    post_author_name = author_nicknames.get(post.author_id, "알 수 없음")
 
     comment_text = await generator.generate_comment(
         persona, post.title, post.content, post_author_name,
@@ -219,9 +277,12 @@ async def _do_comment(
     await session.flush()
     await event_bus.publish(CommentCreated(comment_id=comment.id, post_id=post.id, author_id=user_id))
 
+    # Track affinity
+    get_affinity_tracker().record(persona.nickname, post_author_name)
+
     await auto_react_to_content(session, persona.nickname, comment_text, "comment", comment.id)
 
-    logger.info("[%s] Commented on post %s", persona.nickname, post.id)
+    logger.info("[%s] Commented on post %s (topic-weighted)", persona.nickname, post.id)
 
 
 async def _do_reply(
@@ -235,23 +296,30 @@ async def _do_reply(
     if not posts.items:
         return
 
-    post = random.choice(posts.items)
+    author_ids = {p.author_id for p in posts.items}
+    author_nicknames = await _collect_author_nicknames(session, author_ids)
+    engagement_data = await _collect_engagement(session, posts.items)
 
-    # Get post author
-    user_repo = UserRepository(session)
-    post_author = await user_repo.get_by_id(post.author_id)
-    post_author_name = post_author.nickname if post_author else "알 수 없음"
+    post = select_post(persona, posts.items, author_nicknames, engagement_data)
+    if not post:
+        return
+
+    post_author_name = author_nicknames.get(post.author_id, "알 수 없음")
 
     comment_repo = CommentRepository(session)
     comments = await comment_repo.get_by_post(post.id, PaginationParams(page=1, size=persona.recent_scope))
     if not comments.items:
         return
 
-    parent = random.choice(comments.items)
+    # Collect comment author nicknames for affinity-weighted selection
+    comment_author_ids = {c.author_id for c in comments.items}
+    comment_author_nicks = await _collect_author_nicknames(session, comment_author_ids)
 
-    # Get comment author
-    comment_author = await user_repo.get_by_id(parent.author_id)
-    comment_author_name = comment_author.nickname if comment_author else "알 수 없음"
+    parent = select_comment(persona, comments.items, comment_author_nicks)
+    if not parent:
+        return
+
+    comment_author_name = comment_author_nicks.get(parent.author_id, "알 수 없음")
 
     reply_text = await generator.generate_reply(
         persona, post.title, post.content, post_author_name,
@@ -268,9 +336,14 @@ async def _do_reply(
     await session.flush()
     await event_bus.publish(CommentCreated(comment_id=reply.id, post_id=post.id, author_id=user_id))
 
+    # Track affinity for both post author and comment author
+    tracker = get_affinity_tracker()
+    tracker.record(persona.nickname, post_author_name)
+    tracker.record(persona.nickname, comment_author_name)
+
     await auto_react_to_content(session, persona.nickname, reply_text, "comment", reply.id)
 
-    logger.info("[%s] Replied to %s's comment on %s's post", persona.nickname, comment_author_name, post_author_name)
+    logger.info("[%s] Replied to %s's comment on %s's post (affinity-weighted)", persona.nickname, comment_author_name, post_author_name)
 
 
 async def _do_quick_react(
@@ -284,7 +357,14 @@ async def _do_quick_react(
     if not posts.items:
         return
 
-    post = random.choice(posts.items)
+    author_ids = {p.author_id for p in posts.items}
+    author_nicknames = await _collect_author_nicknames(session, author_ids)
+    engagement_data = await _collect_engagement(session, posts.items)
+
+    post = select_post(persona, posts.items, author_nicknames, engagement_data)
+    if not post:
+        return
+
     reaction_text = _quick_reaction_pool.pick(persona.archetype)
 
     comment_repo = CommentRepository(session)
@@ -295,5 +375,10 @@ async def _do_quick_react(
     )
     await session.flush()
     await event_bus.publish(CommentCreated(comment_id=comment.id, post_id=post.id, author_id=user_id))
+
+    # Track affinity
+    post_author_name = author_nicknames.get(post.author_id, "")
+    if post_author_name:
+        get_affinity_tracker().record(persona.nickname, post_author_name)
 
     logger.info("[%s] Quick reaction on post %s: %s", persona.nickname, post.id, reaction_text)
