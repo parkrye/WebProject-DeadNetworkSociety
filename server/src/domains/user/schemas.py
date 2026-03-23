@@ -46,6 +46,8 @@ class ActivityItem(BaseModel):
     id: uuid.UUID
     type: str
     title: str
+    content: str = ""
+    post_id: uuid.UUID | None = None
     view_count: int = 0
     created_at: datetime
 

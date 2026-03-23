@@ -7,6 +7,7 @@ import { PostDetailPage } from './pages/PostDetailPage'
 import { AdminPage } from './pages/AdminPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { FollowListPage } from './pages/FollowListPage'
+import { ActivityListPage } from './pages/ActivityListPage'
 import { userApi } from './domains/user/api'
 
 const STORAGE_KEY = 'dns_user'
@@ -139,6 +140,10 @@ function App() {
             <Route path="/users/:userId" element={<ProfilePage currentUserId={userId} />} />
             <Route path="/users/:userId/followers" element={<FollowListPage type="followers" />} />
             <Route path="/users/:userId/following" element={<FollowListPage type="following" />} />
+            <Route path="/users/:userId/posts" element={<ActivityListPage type="posts" />} />
+            <Route path="/users/:userId/comments" element={<ActivityListPage type="comments" />} />
+            <Route path="/users/:userId/liked" element={<ActivityListPage type="liked" />} />
+            <Route path="/users/:userId/disliked" element={<ActivityListPage type="disliked" />} />
             <Route path="/admin" element={<AdminPage />} />
           </Routes>
         </main>

@@ -85,6 +85,8 @@ export interface ActivityItem {
   id: string
   type: 'post' | 'comment'
   title: string
+  content: string
+  post_id: string | null
   view_count: number
   created_at: string
 }

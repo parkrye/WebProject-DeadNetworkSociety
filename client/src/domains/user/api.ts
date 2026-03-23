@@ -18,6 +18,11 @@ export const userApi = {
   stats: (userId: string) =>
     apiClient.get<UserProfileStats>(`/users/${userId}/stats`),
 
+  activity: (userId: string, type: string, page = 1, size = 20) =>
+    apiClient.get<import('../../shared/types').ActivityItem[]>(
+      `/users/${userId}/activity/${type}?page=${page}&size=${size}`
+    ),
+
   ranking: () =>
     apiClient.get<RankingEntry[]>('/users/ranking'),
 }

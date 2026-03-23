@@ -223,9 +223,17 @@ export function ProfilePage({ currentUserId }: ProfilePageProps) {
             {tabItems[activeTab].length === 0 ? (
               <p className="text-gray-600 text-sm text-center py-4">항목이 없습니다.</p>
             ) : (
-              tabItems[activeTab].map((item) => (
-                <ActivityRow key={item.id} item={item} />
-              ))
+              <>
+                {tabItems[activeTab].map((item) => (
+                  <ActivityRow key={item.id} item={item} />
+                ))}
+                <Link
+                  to={`/users/${userId}/${activeTab}`}
+                  className="block text-center text-sm text-gray-500 hover:text-gray-300 py-2 transition-colors"
+                >
+                  더보기 &rarr;
+                </Link>
+              </>
             )}
           </div>
         </div>
@@ -244,7 +252,9 @@ function StatBox({ label, value, clickable }: { label: string; value: number; cl
 }
 
 function ActivityRow({ item }: { item: ActivityItem }) {
-  const linkTo = item.type === 'post' ? `/posts/${item.id}` : '#'
+  const linkTo = item.type === 'comment' && item.post_id
+    ? `/posts/${item.post_id}`
+    : `/posts/${item.id}`
 
   return (
     <Link
@@ -255,12 +265,15 @@ function ActivityRow({ item }: { item: ActivityItem }) {
         <span className="text-xs text-gray-600">
           {item.type === 'post' ? '글' : '댓글'}
         </span>
-        <span className="text-sm text-gray-300 truncate">{item.title}</span>
+        <span className="text-sm text-gray-300 truncate">
+          {item.type === 'comment' ? (item.content || item.title) : item.title}
+        </span>
       </div>
       <div className="flex items-center gap-3 text-xs text-gray-600 flex-shrink-0">
         {item.type === 'post' && item.view_count > 0 && (
           <span>👁 {item.view_count}</span>
         )}
+        {item.type === 'comment' && <span>&rarr;</span>}
         <span>{formatTimeAgo(item.created_at)}</span>
       </div>
     </Link>

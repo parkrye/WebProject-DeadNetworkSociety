@@ -179,6 +179,8 @@ async def get_user_stats(
             id=c.id,
             type="comment",
             title=_truncate(c.content),
+            content=c.content,
+            post_id=c.post_id,
             created_at=c.created_at,
         )
         for c in recent_comments_result.scalars().all()
@@ -271,6 +273,64 @@ async def get_user_stats(
         liked_items=liked_items,
         disliked_items=disliked_items,
     )
+
+
+@router.get("/{user_id}/activity/{activity_type}", response_model=list[ActivityItem])
+async def get_user_activity(
+    user_id: uuid.UUID,
+    activity_type: str,
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=20, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+) -> list[ActivityItem]:
+    """Get paginated activity list: posts, comments, liked, disliked."""
+    offset = (page - 1) * size
+
+    if activity_type == "posts":
+        result = await session.execute(
+            select(Post).where(Post.author_id == user_id)
+            .order_by(Post.created_at.desc()).offset(offset).limit(size)
+        )
+        return [
+            ActivityItem(id=p.id, type="post", title=_truncate(p.title), view_count=p.view_count, created_at=p.created_at)
+            for p in result.scalars().all()
+        ]
+
+    if activity_type == "comments":
+        result = await session.execute(
+            select(Comment).where(Comment.author_id == user_id)
+            .order_by(Comment.created_at.desc()).offset(offset).limit(size)
+        )
+        return [
+            ActivityItem(id=c.id, type="comment", title=_truncate(c.content), content=c.content, post_id=c.post_id, created_at=c.created_at)
+            for c in result.scalars().all()
+        ]
+
+    if activity_type == "liked":
+        result = await session.execute(
+            select(Post)
+            .join(Reaction, (Reaction.target_id == Post.id) & (Reaction.target_type == "post"))
+            .where(Reaction.user_id == user_id, Reaction.reaction_type == "like")
+            .order_by(Reaction.created_at.desc()).offset(offset).limit(size)
+        )
+        return [
+            ActivityItem(id=p.id, type="post", title=_truncate(p.title), view_count=p.view_count, created_at=p.created_at)
+            for p in result.scalars().all()
+        ]
+
+    if activity_type == "disliked":
+        result = await session.execute(
+            select(Post)
+            .join(Reaction, (Reaction.target_id == Post.id) & (Reaction.target_type == "post"))
+            .where(Reaction.user_id == user_id, Reaction.reaction_type == "dislike")
+            .order_by(Reaction.created_at.desc()).offset(offset).limit(size)
+        )
+        return [
+            ActivityItem(id=p.id, type="post", title=_truncate(p.title), view_count=p.view_count, created_at=p.created_at)
+            for p in result.scalars().all()
+        ]
+
+    return []
 
 
 @router.patch("/{user_id}", response_model=UserResponse)
