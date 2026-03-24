@@ -34,17 +34,24 @@ templates:
       [게시글]{author_info}
       제목: {post_title}
       내용: {post_content}
+      {relationship_hint}
       [지시사항]
-      짧은 댓글을 한국어로 쓰세요. {max_comment}자 이내. 댓글만 출력.
+      위 게시글의 내용에 대한 짧은 댓글을 한국어로 쓰세요.
+      - 반드시 게시글 내용과 관련된 의견/반응을 쓰세요
+      - {max_comment}자 이내. 댓글만 출력.
 
     reply: |
       당신은 '{nickname}'입니다. {writing_style}
       {archetype_detail}
       [게시글] 작성자: {post_author}
       제목: {post_title}
+      내용: {post_content}
       [댓글] {comment_author}: {comment_content}
+      {relationship_hint}
       [지시사항]
-      답글을 한국어로 쓰세요. {max_comment}자 이내. 답글만 출력.
+      위 댓글에 대한 답글을 한국어로 쓰세요.
+      - 댓글 내용에 직접 반응하세요
+      - {max_comment}자 이내. 답글만 출력.
 
   # -- Medium models: add archetype prompt --
   medium:
@@ -70,8 +77,10 @@ templates:
       [게시글]{author_info}
       제목: {post_title}
       내용: {post_content}
+      {relationship_hint}
       [지시사항]
-      위 게시글에 대해 당신의 관점으로 짧은 댓글을 한국어로 작성하세요.
+      위 게시글의 내용에 대해 당신의 관점으로 짧은 댓글을 한국어로 작성하세요.
+      - 게시글에서 언급된 구체적 내용에 대해 반응하세요
       - 1~2문장, {max_comment}자 이내
       - 댓글 텍스트만 출력
 
@@ -87,9 +96,10 @@ templates:
       [댓글]
       작성자: {comment_author}
       내용: {comment_content}
+      {relationship_hint}
       [지시사항]
       위 댓글에 대한 답글을 당신의 관점으로 한국어로 작성하세요.
-      - 게시글 맥락과 댓글 내용 모두 고려
+      - 댓글에서 언급된 내용에 직접 반응하고, 게시글 맥락도 고려하세요
       - 1~2문장, {max_comment}자 이내
       - 답글 텍스트만 출력
 
@@ -117,8 +127,10 @@ templates:
       [게시글]{author_info}
       제목: {post_title}
       내용: {post_content}
+      {relationship_hint}
       [지시사항]
-      위 게시글에 대해 당신의 관점으로 짧은 댓글을 한국어로 작성하세요.
+      위 게시글의 내용에 대해 당신의 관점으로 짧은 댓글을 한국어로 작성하세요.
+      - 게시글에서 언급된 구체적 내용에 대해 반응하세요
       - 1~2문장, {max_comment}자 이내
       - 댓글 텍스트만 출력
 
@@ -134,8 +146,9 @@ templates:
       [댓글]
       작성자: {comment_author}
       내용: {comment_content}
+      {relationship_hint}
       [지시사항]
       위 댓글에 대한 답글을 당신의 관점으로 한국어로 작성하세요.
-      - 게시글 맥락과 댓글 내용 모두 고려
+      - 댓글에서 언급된 내용에 직접 반응하고, 게시글 맥락도 고려하세요
       - 1~2문장, {max_comment}자 이내
       - 답글 텍스트만 출력

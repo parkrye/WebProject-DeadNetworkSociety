@@ -272,6 +272,32 @@ async def _get_affinities(session: AsyncSession, user_id: 'uuid.UUID', author_id
     return await rel_repo.get_affinities_for_authors(user_id, author_ids)
 
 
+async def _build_relationship_hint(
+    session: AsyncSession, actor_id: 'uuid.UUID', target_id: 'uuid.UUID', target_nickname: str,
+) -> str:
+    """Build a natural language hint about the relationship for the LLM prompt."""
+    if actor_id == target_id:
+        return ""
+    follow_repo = FollowRepository(session)
+    rel_repo = PersonaRelationshipRepository(session)
+
+    is_following = await follow_repo.is_following(actor_id, target_id)
+    sents = await rel_repo.get_sentiments_for_authors(actor_id, {target_id})
+    sentiment = sents.get(target_id, 0.0)
+
+    parts = []
+    if is_following:
+        parts.append(f"당신은 {target_nickname}을(를) 팔로우하고 있습니다.")
+    if sentiment > 0.3:
+        parts.append(f"{target_nickname}에 대해 호감을 느끼고 있습니다. 친근하게 반응하세요.")
+    elif sentiment < -0.3:
+        parts.append(f"{target_nickname}에 대해 불만을 느끼고 있습니다. 비판적으로 반응하세요.")
+
+    if not parts:
+        return ""
+    return "[관계] " + " ".join(parts)
+
+
 async def _collect_author_nicknames(session: AsyncSession, author_ids: set) -> dict:
     """Map author UUIDs to nicknames."""
     user_repo = UserRepository(session)
@@ -368,9 +394,11 @@ async def _do_comment(
     await post_repo.increment_view_count(post.id)
 
     post_author_name = author_nicknames.get(post.author_id, "알 수 없음")
+    rel_hint = await _build_relationship_hint(session, user_id, post.author_id, post_author_name)
 
     comment_text = await generator.generate_comment(
         persona, post.title, post.content, post_author_name,
+        relationship_hint=rel_hint,
     )
 
     comment_repo = CommentRepository(session)
@@ -438,9 +466,11 @@ async def _do_reply(
     comment_author = await user_repo.get_by_id(parent.author_id)
     comment_author_name = comment_author.nickname if comment_author else "알 수 없음"
 
+    rel_hint = await _build_relationship_hint(session, user_id, parent.author_id, comment_author_name)
     reply_text = await generator.generate_reply(
         persona, post.title, post.content, post_author_name,
         parent.content, comment_author_name,
+        relationship_hint=rel_hint,
     )
 
     reply = await comment_repo.create(

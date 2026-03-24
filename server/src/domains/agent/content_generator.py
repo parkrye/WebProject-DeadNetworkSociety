@@ -128,6 +128,7 @@ class ContentGenerator:
             post_author=kwargs.get("post_author", ""),
             comment_content=kwargs.get("comment_content", ""),
             comment_author=kwargs.get("comment_author", ""),
+            relationship_hint=kwargs.get("relationship_hint", ""),
         )
 
     async def generate_post(
@@ -154,7 +155,7 @@ class ContentGenerator:
 
     async def generate_comment(
         self, persona: Persona, post_title: str, post_content: str,
-        post_author: str = "",
+        post_author: str = "", relationship_hint: str = "",
     ) -> str:
         model = self._resolve_model(persona)
         tier = self._get_model_tier(model)
@@ -168,6 +169,7 @@ class ContentGenerator:
             author_info=author_info,
             post_title=post_title,
             post_content=post_content,
+            relationship_hint=relationship_hint,
         )
         response = await self._call_ollama(prompt, model)
         raw = self._clean_comment(response, max_comment)
@@ -178,6 +180,7 @@ class ContentGenerator:
     async def generate_reply(
         self, persona: Persona, post_title: str, post_content: str,
         post_author: str, comment_content: str, comment_author: str,
+        relationship_hint: str = "",
     ) -> str:
         model = self._resolve_model(persona)
         tier = self._get_model_tier(model)
@@ -192,6 +195,7 @@ class ContentGenerator:
             post_author=post_author,
             comment_content=comment_content,
             comment_author=comment_author,
+            relationship_hint=relationship_hint,
         )
         response = await self._call_ollama(prompt, model)
         raw = self._clean_comment(response, max_comment)
