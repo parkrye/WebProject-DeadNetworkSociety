@@ -11,19 +11,19 @@ export function PostCard({ post }: PostCardProps) {
   const timeAgo = formatTimeAgo(post.created_at)
 
   return (
-    <article className="border border-gray-800 rounded-lg p-4 hover:border-gray-700 transition-colors">
+    <article className="bg-cyber-card border border-cyber-border rounded-lg p-4 hover:border-cyber-accent/30 transition-all duration-200 group">
       <Link to={`/posts/${post.id}`} className="block">
-        <h2 className="text-lg font-semibold text-gray-100 mb-1">{post.title}</h2>
-        <p className="text-gray-400 text-sm line-clamp-3 mb-2">{post.content}</p>
+        <h2 className="text-[15px] font-semibold text-cyber-text mb-1 group-hover:text-cyber-accent transition-colors">{post.title}</h2>
+        <p className="text-cyber-text-muted text-sm line-clamp-3 mb-2 leading-relaxed">{post.content}</p>
         {post.keywords && post.keywords.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2">
             {post.keywords.map((kw, i) => (
-              <span key={i} className="text-xs text-indigo-400">#{kw}</span>
+              <span key={i} className="text-[11px] text-cyber-accent/70 bg-cyber-accent/5 px-1.5 py-0.5 rounded">#{kw}</span>
             ))}
           </div>
         )}
       </Link>
-      <div className="flex items-center justify-between text-xs text-gray-500">
+      <div className="flex items-center justify-between text-xs text-cyber-text-dim">
         <div className="flex items-center gap-3">
           <AuthorLink
             authorId={post.author_id}
@@ -32,23 +32,23 @@ export function PostCard({ post }: PostCardProps) {
           />
           <span>{timeAgo}</span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           {post.popularity_score != null && (
-            <span className="flex items-center gap-1 text-yellow-500" title="Popularity">
-              <span>★</span>{post.popularity_score.toFixed(1)}
+            <span className="flex items-center gap-0.5 text-cyber-warning" title="인기도">
+              <span className="text-[10px]">★</span>{post.popularity_score.toFixed(1)}
             </span>
           )}
-          <span className="flex items-center gap-1" title="Views">
-            <span>👁</span> {post.view_count}
+          <span className="flex items-center gap-0.5" title="조회수">
+            <span className="text-[10px]">◉</span>{post.view_count}
           </span>
-          <span className="flex items-center gap-1" title="Comments">
-            <span>💬</span> {post.comment_count}
+          <span className="flex items-center gap-0.5" title="댓글">
+            <span className="text-[10px]">◈</span>{post.comment_count}
           </span>
-          <span className="flex items-center gap-1 text-green-500" title="Likes">
-            <span>+</span>{post.like_count}
+          <span className="flex items-center gap-0.5 text-cyber-positive" title="좋아요">
+            +{post.like_count}
           </span>
-          <span className="flex items-center gap-1 text-red-500" title="Dislikes">
-            <span>-</span>{post.dislike_count}
+          <span className="flex items-center gap-0.5 text-cyber-negative" title="싫어요">
+            -{post.dislike_count}
           </span>
         </div>
       </div>

@@ -21,21 +21,28 @@ function NavTabs() {
   ]
 
   return (
-    <nav className="flex gap-4 text-sm">
+    <nav className="flex gap-1">
       {tabs.map((tab) => (
         <Link
           key={tab.path}
           to={tab.path}
-          className={`transition-colors ${
+          className={`px-3 py-1.5 text-sm rounded transition-all duration-200 ${
             location.pathname === tab.path
-              ? 'text-indigo-400 font-medium'
-              : 'text-gray-400 hover:text-gray-200'
+              ? 'bg-cyber-accent/15 text-cyber-accent border border-cyber-accent/30'
+              : 'text-cyber-text-muted hover:text-cyber-text hover:bg-cyber-card'
           }`}
         >
           {tab.label}
         </Link>
       ))}
-      <Link to="/admin" className="text-gray-400 hover:text-gray-200 transition-colors">
+      <Link
+        to="/admin"
+        className={`px-3 py-1.5 text-sm rounded transition-all duration-200 ${
+          location.pathname === '/admin'
+            ? 'bg-cyber-accent/15 text-cyber-accent border border-cyber-accent/30'
+            : 'text-cyber-text-dim hover:text-cyber-text-muted hover:bg-cyber-card'
+        }`}
+      >
         관리
       </Link>
     </nav>
@@ -72,7 +79,7 @@ function App() {
       setUsernameInput('')
       setPasswordInput('')
     } catch {
-      setLoginError('아이디 또는 비밀번호가 올바르지 않습니다.')
+      setLoginError('인증 실패')
     }
   }
 
@@ -84,54 +91,63 @@ function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-gray-950 text-gray-100">
-        <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link to="/" className="text-xl font-bold hover:text-gray-300 transition-colors">
-              Dead Network Society
-            </Link>
-            <NavTabs />
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            {userId ? (
-              <>
-                <Link to={`/users/${userId}`} className="text-gray-200 hover:text-white transition-colors font-medium">
-                  {nickname}
-                </Link>
-                <button onClick={handleLogout} className="text-gray-500 hover:text-gray-300 transition-colors">
-                  로그아웃
-                </button>
-              </>
-            ) : (
-              <form onSubmit={handleLogin} className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={usernameInput}
-                  onChange={(e) => setUsernameInput(e.target.value)}
-                  placeholder="아이디"
-                  className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-gray-500 w-28"
-                />
-                <input
-                  type="password"
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                  placeholder="비밀번호"
-                  className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-gray-500 w-28"
-                />
-                <button
-                  type="submit"
-                  className="bg-indigo-600 hover:bg-indigo-500 text-sm px-3 py-1 rounded transition-colors"
-                >
-                  로그인
-                </button>
-                {loginError && (
-                  <span className="text-red-400 text-xs">{loginError}</span>
-                )}
-              </form>
-            )}
+      <div className="min-h-screen bg-cyber-bg text-cyber-text">
+        {/* Header */}
+        <header className="border-b border-cyber-border/50 backdrop-blur-sm bg-cyber-bg/80 sticky top-0 z-50">
+          <div className="mx-auto max-w-4xl px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-5">
+              <Link to="/" className="text-lg font-bold text-cyber-accent hover:text-cyber-accent-hover transition-colors tracking-tight">
+                DNS<span className="text-cyber-text-dim font-normal text-sm ml-1">// Dead Network Society</span>
+              </Link>
+              <NavTabs />
+            </div>
+            <div className="flex items-center gap-3 text-sm">
+              {userId ? (
+                <div className="flex items-center gap-3">
+                  <Link
+                    to={`/users/${userId}`}
+                    className="text-cyber-text hover:text-cyber-accent transition-colors font-medium"
+                  >
+                    {nickname}
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="text-cyber-text-dim hover:text-cyber-negative text-xs transition-colors"
+                  >
+                    로그아웃
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleLogin} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={usernameInput}
+                    onChange={(e) => setUsernameInput(e.target.value)}
+                    placeholder="ID"
+                    className="bg-cyber-card border border-cyber-border rounded px-2.5 py-1 text-xs text-cyber-text placeholder-cyber-text-dim focus:outline-none focus:border-cyber-accent/50 w-24 transition-colors"
+                  />
+                  <input
+                    type="password"
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    placeholder="PW"
+                    className="bg-cyber-card border border-cyber-border rounded px-2.5 py-1 text-xs text-cyber-text placeholder-cyber-text-dim focus:outline-none focus:border-cyber-accent/50 w-24 transition-colors"
+                  />
+                  <button
+                    type="submit"
+                    className="bg-cyber-accent/20 hover:bg-cyber-accent/30 text-cyber-accent text-xs px-3 py-1 rounded border border-cyber-accent/30 transition-all"
+                  >
+                    접속
+                  </button>
+                  {loginError && <span className="text-cyber-negative text-xs">{loginError}</span>}
+                </form>
+              )}
+            </div>
           </div>
         </header>
-        <main className="mx-auto max-w-3xl px-4 py-8">
+
+        {/* Main */}
+        <main className="mx-auto max-w-4xl px-4 py-6">
           <Routes>
             <Route path="/" element={<FeedPage userId={userId} />} />
             <Route path="/popular" element={<PopularPage userId={userId} />} />

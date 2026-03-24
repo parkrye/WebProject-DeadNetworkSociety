@@ -11,19 +11,19 @@ interface AuthorLinkProps {
 
 export function AuthorLink({ authorId, nickname, avatarUrl, size = 'sm' }: AuthorLinkProps) {
   const isAnon = nickname === ANON_NICKNAME
-  const dim = size === 'sm' ? 'w-5 h-5 text-xs' : 'w-7 h-7 text-sm'
+  const dim = size === 'sm' ? 'w-5 h-5 text-[10px]' : 'w-7 h-7 text-xs'
 
   const avatar = avatarUrl ? (
-    <img src={avatarUrl} alt={nickname} className={`${dim} rounded-full bg-gray-700 object-cover`} />
+    <img src={avatarUrl} alt={nickname} className={`${dim} rounded-full bg-cyber-card object-cover ring-1 ring-cyber-border`} />
   ) : (
-    <span className={`${dim} rounded-full bg-gray-800 flex items-center justify-center text-gray-500`}>
+    <span className={`${dim} rounded-full bg-cyber-card flex items-center justify-center text-cyber-text-dim ring-1 ring-cyber-border`}>
       {nickname[0]}
     </span>
   )
 
   if (isAnon) {
     return (
-      <span className="flex items-center gap-2 text-gray-500">
+      <span className="flex items-center gap-1.5 text-cyber-text-dim">
         {avatar}
         <span>{nickname}</span>
       </span>
@@ -34,10 +34,10 @@ export function AuthorLink({ authorId, nickname, avatarUrl, size = 'sm' }: Autho
     <Link
       to={`/users/${authorId}`}
       onClick={(e) => e.stopPropagation()}
-      className="flex items-center gap-2 hover:text-gray-200 transition-colors"
+      className="flex items-center gap-1.5 hover:text-cyber-accent transition-colors"
     >
       {avatar}
-      <span className="text-gray-400 font-medium">{nickname}</span>
+      <span className="text-cyber-text-muted font-medium">{nickname}</span>
     </Link>
   )
 }
