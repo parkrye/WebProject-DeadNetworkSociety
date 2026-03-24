@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(*)"
+      "Bash(*)",
+      "WebFetch(domain:news.naver.com)",
+      "WebFetch(domain:namu.wiki)",
+      "WebFetch(domain:news.google.com)"
     ]
   }
 }

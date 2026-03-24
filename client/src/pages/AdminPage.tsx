@@ -161,7 +161,8 @@ export function AdminPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">에이전트 관리</h2>
           <div className="flex gap-3 text-xs text-gray-500">
-            <span>활동 중: <strong className="text-green-400">{activeCount}</strong></span>
+            <span>행동 중: <strong className="text-green-400">{activeCount}</strong></span>
+            <span>대기: <strong className="text-gray-400">{(agents?.length ?? 0) - activeCount}</strong></span>
             <span>전체: <strong className="text-gray-300">{agents?.length ?? 0}</strong></span>
           </div>
         </div>
