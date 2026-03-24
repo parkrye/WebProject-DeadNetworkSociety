@@ -559,6 +559,10 @@ async def _do_create_post(
     content_text = f"{post.title} {result.get('content', '')}"
     await auto_react_to_content(session, persona.nickname, content_text, "post", post.id, target_keywords=context_keywords)
 
+    # Auto-mention: probabilistically tag related personas
+    from src.domains.agent.mention_handler import maybe_auto_mention
+    await maybe_auto_mention(session, user_id, persona.nickname, content_text, context_keywords, "post", post.id)
+
     logger.info("[%s] Created post: %s", persona.nickname, post.title[:50])
 
 
@@ -622,6 +626,9 @@ async def _do_comment(
     await evaluate_auto_follow(session, persona.nickname, post_author_name, user_id, post.author_id)
 
     await auto_react_to_content(session, persona.nickname, comment_text, "comment", comment.id)
+
+    from src.domains.agent.mention_handler import maybe_auto_mention
+    await maybe_auto_mention(session, user_id, persona.nickname, comment_text, comment_kws, "comment", comment.id)
 
     logger.info("[%s] Commented on post %s (topic-weighted)", persona.nickname, post.id)
 
