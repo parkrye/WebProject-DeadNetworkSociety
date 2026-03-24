@@ -124,8 +124,16 @@ async def start_agent_system(
     session_factory: async_sessionmaker[AsyncSession],
     content_generator: ContentGenerator,
 ) -> asyncio.Task:
-    """Register personas and start the scheduler as a background task."""
+    """Register personas, bootstrap knowledge, and start the scheduler."""
     await register_all_personas(session_factory)
+
+    # Bootstrap knowledge graphs (parallel web search, skips already-bootstrapped)
+    from src.domains.agent.knowledge_bootstrap import bootstrap_knowledge_graphs
+    try:
+        await bootstrap_knowledge_graphs(session_factory)
+    except Exception:
+        logger.exception("Knowledge bootstrap failed, continuing without it")
+
     await _wait_for_ollama(content_generator)
 
     task = asyncio.create_task(
