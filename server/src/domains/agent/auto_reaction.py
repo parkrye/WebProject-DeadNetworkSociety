@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domains.agent.persona_loader import Persona, load_all_personas
 from src.domains.agent.persona_state_repo import PersonaStateRepository
-from src.domains.follow.repository import FollowRepository, PersonaRelationshipRepository
+from src.domains.follow.repository import FollowRepository, PersonaMemoryRepository, PersonaRelationshipRepository
 from src.domains.post.repository import PostRepository
 from src.domains.reaction.repository import ReactionRepository
 from src.domains.user.repository import UserRepository
@@ -138,6 +138,7 @@ async def auto_react_to_content(
     post_repo = PostRepository(session)
     follow_repo = FollowRepository(session)
     rel_repo = PersonaRelationshipRepository(session)
+    mem_repo = PersonaMemoryRepository(session)
     state_repo = PersonaStateRepository(session)
 
     author_user = await user_repo.get_by_nickname(author_nickname)
@@ -192,7 +193,7 @@ async def auto_react_to_content(
 
         # Random perturbation: react to content you normally wouldn't
         if reaction_type is None and random.random() < random_reaction_chance:
-            reaction_type = random.choice(["like", "like", "like", "dislike"])  # 75% like, 25% dislike
+            reaction_type = random.choice(["like", "dislike"])
 
         # Random conflict: dislike content (anyone, not just following)
         if reaction_type is None and random.random() < random_conflict_chance:
@@ -216,9 +217,21 @@ async def auto_react_to_content(
             await rel_repo.record_interaction(
                 user.id, author_user_id, reaction_type=reaction_type, sentiment_delta=s_delta,
             )
-            # Also update follow relationship if following
             if is_following:
                 await follow_repo.increment_interaction(user.id, author_user_id, s_delta)
+
+            # Record memory about this interaction
+            content_preview = content_text[:60]
+            if reaction_type == "like":
+                await mem_repo.add_memory(
+                    user.id, author_user_id, "positive",
+                    f"'{content_preview}' 글이 좋았음",
+                )
+            else:
+                await mem_repo.add_memory(
+                    user.id, author_user_id, "negative",
+                    f"'{content_preview}' 글이 마음에 안 들었음",
+                )
 
         # Update mood
         mood_delta = mood_like if reaction_type == "like" else mood_dislike

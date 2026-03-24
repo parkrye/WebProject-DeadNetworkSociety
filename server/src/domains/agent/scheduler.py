@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 import yaml
 from pathlib import Path
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.domains.agent.action_selector import (
@@ -23,7 +24,8 @@ from src.domains.agent.quick_reaction_pool import QuickReactionPool
 from src.domains.agent.status_store import update_status
 from src.domains.agent.persona_loader import Persona, load_personas_by_model
 from src.domains.agent.target_selector import select_post, select_comment
-from src.domains.follow.repository import FollowRepository, PersonaRelationshipRepository
+from src.domains.follow.models import PersonaRelationship
+from src.domains.follow.repository import FollowRepository, PersonaMemoryRepository, PersonaRelationshipRepository
 from src.domains.post.models import Post
 from src.domains.post.repository import PopularPostRepository, PostMetadataRepository, PostRepository
 from src.domains.comment.models import Comment
@@ -275,27 +277,50 @@ async def _get_affinities(session: AsyncSession, user_id: 'uuid.UUID', author_id
 async def _build_relationship_hint(
     session: AsyncSession, actor_id: 'uuid.UUID', target_id: 'uuid.UUID', target_nickname: str,
 ) -> str:
-    """Build a natural language hint about the relationship for the LLM prompt."""
+    """Build a rich relationship context for the LLM prompt."""
     if actor_id == target_id:
         return ""
     follow_repo = FollowRepository(session)
     rel_repo = PersonaRelationshipRepository(session)
+    mem_repo = PersonaMemoryRepository(session)
 
     is_following = await follow_repo.is_following(actor_id, target_id)
-    sents = await rel_repo.get_sentiments_for_authors(actor_id, {target_id})
-    sentiment = sents.get(target_id, 0.0)
+    is_followed_by = await follow_repo.is_following(target_id, actor_id)
+
+    rel_stmt = select(PersonaRelationship).where(
+        PersonaRelationship.actor_id == actor_id,
+        PersonaRelationship.target_id == target_id,
+    )
+    rel_result = await session.execute(rel_stmt)
+    rel = rel_result.scalar_one_or_none()
 
     parts = []
-    if is_following:
+
+    # Follow status
+    if is_following and is_followed_by:
+        parts.append(f"당신과 {target_nickname}은(는) 서로 팔로우하는 사이입니다.")
+    elif is_following:
         parts.append(f"당신은 {target_nickname}을(를) 팔로우하고 있습니다.")
-    if sentiment > 0.3:
-        parts.append(f"{target_nickname}에 대해 호감을 느끼고 있습니다. 친근하게 반응하세요.")
-    elif sentiment < -0.3:
-        parts.append(f"{target_nickname}에 대해 불만을 느끼고 있습니다. 비판적으로 반응하세요.")
+    elif is_followed_by:
+        parts.append(f"{target_nickname}이(가) 당신을 팔로우하고 있습니다.")
+
+    # Interaction stats
+    if rel:
+        if rel.like_count > 0 or rel.dislike_count > 0:
+            parts.append(f"그동안 {target_nickname}의 글에 좋아요 {rel.like_count}회, 싫어요 {rel.dislike_count}회를 남겼습니다.")
+        if rel.sentiment_score > 0.3:
+            parts.append("호감을 느끼고 있으니 친근하게 반응하세요.")
+        elif rel.sentiment_score < -0.3:
+            parts.append("불만을 느끼고 있으니 비판적으로 반응하세요.")
+
+    # Memories
+    memory_text = await mem_repo.format_memories_for_prompt(actor_id, target_id, target_nickname)
+    if memory_text:
+        parts.append(memory_text)
 
     if not parts:
         return ""
-    return "[관계] " + " ".join(parts)
+    return "\n".join(parts)
 
 
 async def _collect_author_nicknames(session: AsyncSession, author_ids: set) -> dict:
@@ -333,14 +358,97 @@ async def _fetch_popular_context(session: AsyncSession, persona: Persona) -> str
     )
 
 
+async def _create_mention_post(
+    session: AsyncSession, user_id: 'uuid.UUID', persona: Persona, generator: ContentGenerator,
+) -> dict[str, str]:
+    """Create a post mentioning/targeting a specific persona based on relationship."""
+    rel_result = await session.execute(
+        select(PersonaRelationship.target_id, PersonaRelationship.sentiment_score)
+        .where(PersonaRelationship.actor_id == user_id, PersonaRelationship.interaction_count >= 2)
+        .order_by(PersonaRelationship.interaction_count.desc())
+        .limit(5)
+    )
+    candidates = rel_result.all()
+    if not candidates:
+        return await generator.generate_post(persona)
+
+    target_row = random.choice(candidates)
+    target_id = target_row.target_id
+
+    user_repo = UserRepository(session)
+    target_user = await user_repo.get_by_id(target_id)
+    if not target_user:
+        return await generator.generate_post(persona)
+
+    mem_repo = PersonaMemoryRepository(session)
+    memory_text = await mem_repo.format_memories_for_prompt(user_id, target_id, target_user.nickname)
+    rel_hint = await _build_relationship_hint(session, user_id, target_id, target_user.nickname)
+    mention_context = "\n".join(filter(None, [rel_hint, memory_text]))
+
+    return await generator.generate_mention_post(persona, target_user.nickname, mention_context)
+
+
+async def _create_followup_post(
+    session: AsyncSession, user_id: 'uuid.UUID', persona: Persona, generator: ContentGenerator,
+) -> dict[str, str]:
+    """Create a follow-up post based on a previous post (own or popular)."""
+    post_repo = PostRepository(session)
+
+    # 50% chance: follow up own post, 50%: follow up a popular/recent post
+    if random.random() < 0.5:
+        own_posts = await post_repo.get_recent_by_author(user_id, limit=5)
+        if own_posts:
+            prev = random.choice(own_posts)
+            return await generator.generate_followup_post(persona, prev.title, prev.content)
+
+    recent = await post_repo.get_list(PaginationParams(page=1, size=10))
+    if recent.items:
+        prev = random.choice(recent.items)
+        return await generator.generate_followup_post(persona, prev.title, prev.content)
+
+    return await generator.generate_post(persona)
+
+
+async def _pick_post_type(session: AsyncSession, user_id: 'uuid.UUID', persona: Persona) -> str:
+    """Randomly select post type: topic (60%), mention (20%), followup (20%)."""
+    roll = random.random()
+    if roll < 0.6:
+        return "topic"
+
+    if roll < 0.8:
+        # mention: only if we have relationship data with someone
+        rel_result = await session.execute(
+            select(PersonaRelationship.target_id)
+            .where(PersonaRelationship.actor_id == user_id, PersonaRelationship.interaction_count >= 2)
+            .limit(5)
+        )
+        if rel_result.all():
+            return "mention"
+        return "topic"
+
+    # followup: only if we have previous posts
+    post_repo = PostRepository(session)
+    own_posts = await post_repo.get_recent_by_author(user_id, limit=1)
+    if own_posts:
+        return "followup"
+    return "topic"
+
+
 async def _do_create_post(
     session: AsyncSession,
     user_id: 'uuid.UUID',
     persona: Persona,
     generator: ContentGenerator,
 ) -> None:
-    popular_context = await _fetch_popular_context(session, persona)
-    result = await generator.generate_post(persona, popular_context=popular_context)
+    post_type = await _pick_post_type(session, user_id, persona)
+
+    if post_type == "mention":
+        result = await _create_mention_post(session, user_id, persona, generator)
+    elif post_type == "followup":
+        result = await _create_followup_post(session, user_id, persona, generator)
+    else:
+        popular_context = await _fetch_popular_context(session, persona)
+        result = await generator.generate_post(persona, popular_context=popular_context)
     post_repo = PostRepository(session)
     post = await post_repo.create(
         author_id=user_id,

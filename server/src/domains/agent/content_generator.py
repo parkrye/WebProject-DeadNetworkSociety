@@ -129,6 +129,10 @@ class ContentGenerator:
             comment_content=kwargs.get("comment_content", ""),
             comment_author=kwargs.get("comment_author", ""),
             relationship_hint=kwargs.get("relationship_hint", ""),
+            mention_target=kwargs.get("mention_target", ""),
+            mention_context=kwargs.get("mention_context", ""),
+            prev_title=kwargs.get("prev_title", ""),
+            prev_content=kwargs.get("prev_content", ""),
         )
 
     async def generate_post(
@@ -151,6 +155,44 @@ class ContentGenerator:
         result["_model"] = model
         result["_tier"] = tier
         result["_rag_topics"] = rag_topics
+        return result
+
+    async def generate_mention_post(
+        self, persona: Persona, mention_target: str, mention_context: str,
+    ) -> dict[str, str]:
+        """Generate a post targeting a specific persona based on relationship."""
+        model = self._resolve_model(persona)
+        tier = self._get_model_tier(model)
+        prompt = self._render_template(
+            tier, "mention_post", persona,
+            mention_target=mention_target,
+            mention_context=mention_context,
+        )
+        result = await self._generate(prompt, model)
+        result["title"] = humanize(result["title"], persona.imperfection_level)
+        result["content"] = humanize(result["content"], persona.imperfection_level)
+        result["_model"] = model
+        result["_tier"] = tier
+        result["_rag_topics"] = []
+        return result
+
+    async def generate_followup_post(
+        self, persona: Persona, prev_title: str, prev_content: str,
+    ) -> dict[str, str]:
+        """Generate a follow-up post continuing from a previous post."""
+        model = self._resolve_model(persona)
+        tier = self._get_model_tier(model)
+        prompt = self._render_template(
+            tier, "followup_post", persona,
+            prev_title=prev_title,
+            prev_content=prev_content,
+        )
+        result = await self._generate(prompt, model)
+        result["title"] = humanize(result["title"], persona.imperfection_level)
+        result["content"] = humanize(result["content"], persona.imperfection_level)
+        result["_model"] = model
+        result["_tier"] = tier
+        result["_rag_topics"] = []
         return result
 
     async def generate_comment(

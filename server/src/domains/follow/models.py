@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, UniqueConstraint
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.shared.base_model import Base, UUIDPrimaryKeyMixin, _utc_now
@@ -35,3 +35,14 @@ class PersonaRelationship(Base, UUIDPrimaryKeyMixin):
     dislike_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     sentiment_score: Mapped[float] = mapped_column(Float, default=0.0, server_default="0.0")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now)
+
+
+class PersonaMemory(Base, UUIDPrimaryKeyMixin):
+    """Hidden relationship memory: stores impressions one persona has about another."""
+    __tablename__ = "persona_memories"
+
+    actor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    target_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    memory_type: Mapped[str] = mapped_column(String(20))  # "positive" | "negative"
+    content: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)

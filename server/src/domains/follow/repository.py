@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import math
 
-from src.domains.follow.models import Follow, PersonaRelationship
+from src.domains.follow.models import Follow, PersonaMemory, PersonaRelationship
 from src.domains.user.models import User
 
 
@@ -200,3 +200,64 @@ class PersonaRelationshipRepository:
         )
         result = await self._session.execute(stmt)
         return {r[0]: r[1] for r in result.all()}
+
+
+class PersonaMemoryRepository:
+    """Stores hidden impressions one persona has about another."""
+
+    MAX_MEMORIES_PER_PAIR = 5
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add_memory(
+        self, actor_id: uuid.UUID, target_id: uuid.UUID,
+        memory_type: str, content: str,
+    ) -> None:
+        self._session.add(PersonaMemory(
+            actor_id=actor_id, target_id=target_id,
+            memory_type=memory_type, content=content[:200],
+        ))
+        await self._session.flush()
+
+        count_stmt = (
+            select(func.count()).select_from(PersonaMemory)
+            .where(PersonaMemory.actor_id == actor_id, PersonaMemory.target_id == target_id)
+        )
+        total = (await self._session.execute(count_stmt)).scalar_one()
+        if total > self.MAX_MEMORIES_PER_PAIR:
+            oldest = await self._session.execute(
+                select(PersonaMemory.id)
+                .where(PersonaMemory.actor_id == actor_id, PersonaMemory.target_id == target_id)
+                .order_by(PersonaMemory.created_at.asc())
+                .limit(total - self.MAX_MEMORIES_PER_PAIR)
+            )
+            old_ids = [r[0] for r in oldest.all()]
+            if old_ids:
+                await self._session.execute(
+                    delete(PersonaMemory).where(PersonaMemory.id.in_(old_ids))
+                )
+
+    async def get_memories(
+        self, actor_id: uuid.UUID, target_id: uuid.UUID, limit: int = 5,
+    ) -> list[PersonaMemory]:
+        stmt = (
+            select(PersonaMemory)
+            .where(PersonaMemory.actor_id == actor_id, PersonaMemory.target_id == target_id)
+            .order_by(PersonaMemory.created_at.desc())
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def format_memories_for_prompt(
+        self, actor_id: uuid.UUID, target_id: uuid.UUID, target_nickname: str,
+    ) -> str:
+        memories = await self.get_memories(actor_id, target_id, limit=3)
+        if not memories:
+            return ""
+        lines = [f"[{target_nickname}에 대한 기억]"]
+        for m in memories:
+            tag = "+" if m.memory_type == "positive" else "-"
+            lines.append(f"  ({tag}) {m.content}")
+        return "\n".join(lines)
