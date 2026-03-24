@@ -18,11 +18,13 @@ class CommentRepository:
         content: str,
         parent_id: uuid.UUID | None = None,
         depth: int = 0,
+        keywords: str = "[]",
     ) -> Comment:
         comment = Comment(
             post_id=post_id,
             author_id=author_id,
             content=content,
+            keywords=keywords,
             parent_id=parent_id,
             depth=depth,
         )

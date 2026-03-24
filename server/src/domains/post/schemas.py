@@ -40,6 +40,7 @@ class PostEnrichedResponse(BaseModel):
     author_avatar_url: str = ""
     title: str
     content: str
+    keywords: list[str] = []
     like_count: int
     dislike_count: int
     comment_count: int

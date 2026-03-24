@@ -74,6 +74,11 @@ def _build_enriched_select(like_sub, dislike_sub, comment_sub):
 
 
 def _row_to_enriched(row, popularity_score: float | None = None) -> PostEnrichedResponse:
+    import json
+    try:
+        keywords = json.loads(row.Post.keywords) if row.Post.keywords else []
+    except (json.JSONDecodeError, TypeError):
+        keywords = []
     return PostEnrichedResponse(
         id=row.Post.id,
         author_id=row.Post.author_id,
@@ -81,6 +86,7 @@ def _row_to_enriched(row, popularity_score: float | None = None) -> PostEnriched
         author_avatar_url=row.author_avatar_url or "",
         title=row.Post.title,
         content=row.Post.content,
+        keywords=keywords,
         popularity_score=popularity_score,
         like_count=row.like_count,
         dislike_count=row.dislike_count,

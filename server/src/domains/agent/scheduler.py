@@ -350,12 +350,17 @@ async def _fetch_live_search_context(persona: Persona) -> str:
         return ""
 
 
-async def _fetch_popular_context(session: AsyncSession, persona: Persona) -> str:
-    """Fetch popular posts + trending keywords + live web search as RAG context."""
+async def _fetch_popular_context(session: AsyncSession, persona: Persona) -> tuple[str, list[str]]:
+    """Fetch popular posts + trending keywords + live search. Returns (context, keywords)."""
     from src.domains.agent.live_search import get_live_search
     from src.domains.post.models import PopularPost as PP, TrendingKeyword
+    import re
 
     parts = []
+    collected_keywords: list[str] = []
+
+    # Persona topics as base keywords
+    collected_keywords.extend(persona.topics[:2])
 
     # Trending keywords
     kw_result = await session.execute(
@@ -364,19 +369,28 @@ async def _fetch_popular_context(session: AsyncSession, persona: Persona) -> str
         .limit(10)
     )
     keywords = kw_result.all()
-    trending_words = [r.keyword for r in keywords]
     if keywords:
         kw_list = ", ".join(f"{r.keyword}({r.count})" for r in keywords)
         parts.append(f"[현재 인기 키워드] {kw_list}")
+        # Pick top 2 trending as keywords
+        for r in keywords[:2]:
+            if r.keyword not in collected_keywords:
+                collected_keywords.append(r.keyword)
 
     # Live web search
     live_context = await _fetch_live_search_context(persona)
     if live_context:
         parts.append(live_context)
+        # Extract keywords from search results (first noun-like words)
+        korean_words = re.findall(r'[가-힣]{2,}', live_context)
+        for w in korean_words[:3]:
+            if w not in collected_keywords and len(w) >= 2:
+                collected_keywords.append(w)
+                break
 
     # Popular posts
     stmt = (
-        select(Post.title, Post.content)
+        select(Post.title, Post.content, Post.keywords)
         .join(PP, Post.id == PP.post_id)
         .order_by(PP.popularity_score.desc())
         .limit(3)
@@ -386,10 +400,22 @@ async def _fetch_popular_context(session: AsyncSession, persona: Persona) -> str
     if rows:
         blocks = [f"- {r.title}: {r.content}" for r in rows]
         parts.append("[커뮤니티 인기글]\n" + "\n".join(blocks))
+        # Extract keywords from popular post keywords
+        import json
+        for r in rows:
+            try:
+                post_kws = json.loads(r.keywords) if r.keywords else []
+                for kw in post_kws[:1]:
+                    if kw not in collected_keywords:
+                        collected_keywords.append(kw)
+            except (json.JSONDecodeError, TypeError):
+                pass
 
-    if not parts:
-        return ""
-    return "\n\n" + "\n".join(parts) + "\n위 트렌드/최신정보/인기글을 참고하되, 당신만의 관점으로 재해석하세요."
+    context = ""
+    if parts:
+        context = "\n\n" + "\n".join(parts) + "\n위 트렌드/최신정보/인기글을 참고하되, 당신만의 관점으로 재해석하세요."
+
+    return context, collected_keywords[:8]
 
 
 async def _create_mention_post(
@@ -477,25 +503,32 @@ async def _do_create_post(
     persona: Persona,
     generator: ContentGenerator,
 ) -> None:
+    import json as _json
+
     post_type = await _pick_post_type(session, user_id, persona)
+    context_keywords: list[str] = []
 
     if post_type == "mention":
         result = await _create_mention_post(session, user_id, persona, generator)
+        context_keywords = list(persona.topics[:2])
     elif post_type == "followup":
         result = await _create_followup_post(session, user_id, persona, generator)
+        context_keywords = list(persona.topics[:2])
     else:
-        popular_context = await _fetch_popular_context(session, persona)
+        popular_context, context_keywords = await _fetch_popular_context(session, persona)
         result = await generator.generate_post(persona, popular_context=popular_context)
+
+    keywords_json = _json.dumps(context_keywords, ensure_ascii=False)
     post_repo = PostRepository(session)
     post = await post_repo.create(
         author_id=user_id,
         title=result["title"][:30],
         content=result["content"][:140],
+        keywords=keywords_json,
     )
     await session.flush()
 
     # Save generation metadata
-    import json as _json
     meta_repo = PostMetadataRepository(session)
     await meta_repo.create(
         post_id=post.id,
@@ -546,11 +579,19 @@ async def _do_comment(
         relationship_hint=rel_hint,
     )
 
+    import json as _json2, re as _re2
+    comment_kws = list(persona.topics[:1])
+    post_words = _re2.findall(r'[가-힣]{2,}', post.title)
+    for w in post_words[:2]:
+        if w not in comment_kws:
+            comment_kws.append(w)
+
     comment_repo = CommentRepository(session)
     comment = await comment_repo.create(
         post_id=post.id,
         author_id=user_id,
         content=comment_text[:2000],
+        keywords=_json2.dumps(comment_kws, ensure_ascii=False),
     )
     await session.flush()
     await event_bus.publish(CommentCreated(comment_id=comment.id, post_id=post.id, author_id=user_id))

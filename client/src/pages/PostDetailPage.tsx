@@ -36,7 +36,14 @@ export function PostDetailPage({ userId }: PostDetailPageProps) {
           />
           <span>{new Date(post.created_at).toLocaleString('ko-KR')}</span>
         </div>
-        <div className="text-gray-300 whitespace-pre-wrap mb-4">{post.content}</div>
+        <div className="text-gray-300 whitespace-pre-wrap mb-3">{post.content}</div>
+        {post.keywords && post.keywords.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {post.keywords.map((kw, i) => (
+              <span key={i} className="text-sm text-indigo-400">#{kw}</span>
+            ))}
+          </div>
+        )}
         <ReactionButtons targetType="post" targetId={post.id} userId={userId} />
       </article>
 

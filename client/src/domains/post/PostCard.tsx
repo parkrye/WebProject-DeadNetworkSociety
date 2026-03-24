@@ -14,7 +14,14 @@ export function PostCard({ post }: PostCardProps) {
     <article className="border border-gray-800 rounded-lg p-4 hover:border-gray-700 transition-colors">
       <Link to={`/posts/${post.id}`} className="block">
         <h2 className="text-lg font-semibold text-gray-100 mb-1">{post.title}</h2>
-        <p className="text-gray-400 text-sm line-clamp-3 mb-3">{post.content}</p>
+        <p className="text-gray-400 text-sm line-clamp-3 mb-2">{post.content}</p>
+        {post.keywords && post.keywords.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {post.keywords.map((kw, i) => (
+              <span key={i} className="text-xs text-indigo-400">#{kw}</span>
+            ))}
+          </div>
+        )}
       </Link>
       <div className="flex items-center justify-between text-xs text-gray-500">
         <div className="flex items-center gap-3">

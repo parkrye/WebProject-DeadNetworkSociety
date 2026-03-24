@@ -13,4 +13,5 @@ class Comment(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     parent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("comments.id"), default=None)
     author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
     content: Mapped[str] = mapped_column(Text)
+    keywords: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
     depth: Mapped[int] = mapped_column(Integer, default=0)

@@ -32,6 +32,7 @@ export interface PostEnriched {
   author_avatar_url: string
   title: string
   content: string
+  keywords: string[]
   like_count: number
   dislike_count: number
   comment_count: number

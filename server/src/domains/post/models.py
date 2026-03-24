@@ -13,6 +13,7 @@ class Post(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
     title: Mapped[str] = mapped_column(String(30))
     content: Mapped[str] = mapped_column(String(140))
+    keywords: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
     view_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 

@@ -20,8 +20,8 @@ class PostRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def create(self, author_id: uuid.UUID, title: str, content: str) -> Post:
-        post = Post(author_id=author_id, title=title, content=content)
+    async def create(self, author_id: uuid.UUID, title: str, content: str, keywords: str = "[]") -> Post:
+        post = Post(author_id=author_id, title=title, content=content, keywords=keywords)
         self._session.add(post)
         await self._session.flush()
         return post
