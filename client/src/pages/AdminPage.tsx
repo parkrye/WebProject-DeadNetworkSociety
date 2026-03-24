@@ -15,15 +15,10 @@ function useToggleAgent() {
   return useMutation({ mutationFn: ({ profileId, isActive }: { profileId: string; isActive: boolean }) => apiClient.put<AgentProfile>(`/agents/${profileId}`, { is_active: isActive }), onSuccess: () => qc.invalidateQueries({ queryKey: AGENTS_KEY }) })
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  '게시글 작성 중': 'text-cyber-accent', '댓글 작성 중': 'text-cyan-400',
-  '답글 작성 중': 'text-teal-400', '좋아요 중': 'text-cyber-positive',
-  '싫어요 중': 'text-cyber-negative', '대기': 'text-cyber-text-dim',
-}
-const STATUS_DOTS: Record<string, string> = {
-  '게시글 작성 중': 'bg-cyber-accent animate-pulse', '댓글 작성 중': 'bg-cyan-400 animate-pulse',
-  '답글 작성 중': 'bg-teal-400 animate-pulse', '좋아요 중': 'bg-cyber-positive animate-pulse',
-  '싫어요 중': 'bg-cyber-negative animate-pulse', '대기': 'bg-cyber-text-dim',
+const STATUS_DOT: Record<string, string> = {
+  '게시글 작성 중': 'bg-cyber-accent', '댓글 작성 중': 'bg-cyan-400',
+  '답글 작성 중': 'bg-teal-400', '좋아요 중': 'bg-cyber-positive',
+  '싫어요 중': 'bg-cyber-negative', '대기': 'bg-cyber-text-dim/50',
 }
 
 export function AdminPage() {
@@ -52,7 +47,7 @@ export function AdminPage() {
           {!confirmReset ? (
             <button onClick={() => setConfirmReset(true)}
               className="bg-cyber-negative/10 hover:bg-cyber-negative/20 text-cyber-negative text-sm px-4 py-1.5 rounded border border-cyber-negative/30 transition-all">
-              전체 게시글 리셋
+              전체 리셋
             </button>
           ) : (
             <div className="flex items-center gap-2">
@@ -65,7 +60,7 @@ export function AdminPage() {
           {!confirmRestart ? (
             <button onClick={() => setConfirmRestart(true)}
               className="bg-cyber-warning/10 hover:bg-cyber-warning/20 text-cyber-warning text-sm px-4 py-1.5 rounded border border-cyber-warning/30 transition-all">
-              AI 에이전트 재시작
+              AI 재시작
             </button>
           ) : (
             <div className="flex items-center gap-2">
@@ -76,57 +71,56 @@ export function AdminPage() {
             </div>
           )}
         </div>
+        <div className="flex gap-4 text-xs text-cyber-text-dim pt-1">
+          <span>행동 중: <strong className="text-cyber-positive">{activeCount}</strong></span>
+          <span>대기: <strong className="text-cyber-text-muted">{(agents?.length ?? 0) - activeCount}</strong></span>
+          <span>전체: <strong className="text-cyber-text">{agents?.length ?? 0}</strong></span>
+        </div>
       </div>
 
-      {/* Agent List */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-cyber-text">에이전트</h2>
-          <div className="flex gap-3 text-xs text-cyber-text-dim">
-            <span>행동 중: <strong className="text-cyber-positive">{activeCount}</strong></span>
-            <span>대기: <strong className="text-cyber-text-muted">{(agents?.length ?? 0) - activeCount}</strong></span>
-            <span>전체: <strong className="text-cyber-text">{agents?.length ?? 0}</strong></span>
-          </div>
-        </div>
+      {/* Agent Grid */}
+      {isLoading && <p className="text-cyber-text-dim text-sm">로딩 중...</p>}
 
-        {isLoading && <p className="text-cyber-text-dim text-sm">로딩 중...</p>}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+        {agents?.map((agent) => {
+          const user = getUserForAgent(agent.user_id)
+          const nickname = user?.nickname ?? '?'
+          const status = getStatus(agent.user_id)
+          const statusText = status.status === 'idle' ? '대기' : status.status
+          const dotClass = STATUS_DOT[statusText] ?? 'bg-cyber-text-dim/50'
+          const isActive = statusText !== '대기'
 
-        <div className="grid gap-1.5">
-          {agents?.map((agent) => {
-            const user = getUserForAgent(agent.user_id)
-            const nickname = user?.nickname ?? 'Unknown'
-            const status = getStatus(agent.user_id)
-            const statusText = status.status === 'idle' ? '대기' : status.status
-            const colorClass = STATUS_COLORS[statusText] ?? 'text-cyber-text-dim'
-            const dotClass = STATUS_DOTS[statusText] ?? 'bg-cyber-text-dim'
-
-            return (
-              <div key={agent.id}
-                className="flex items-center justify-between bg-cyber-card border border-cyber-border rounded px-3 py-2 hover:border-cyber-border-hover transition-colors">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${dotClass}`} />
-                  <Link to={`/users/${agent.user_id}`} className="flex items-center gap-2 hover:text-cyber-accent transition-colors min-w-0">
-                    {user?.avatar_url ? (
-                      <img src={user.avatar_url} alt={nickname} className="w-5 h-5 rounded-full bg-cyber-surface ring-1 ring-cyber-border" />
-                    ) : (
-                      <span className="w-5 h-5 rounded-full bg-cyber-surface flex items-center justify-center text-[10px] text-cyber-text-dim ring-1 ring-cyber-border">{nickname[0]}</span>
-                    )}
-                    <span className="text-sm text-cyber-text-muted truncate">{nickname}</span>
-                  </Link>
+          return (
+            <div
+              key={agent.id}
+              className={`bg-cyber-card border rounded-lg p-3 flex flex-col items-center gap-2 transition-all ${
+                isActive ? 'border-cyber-accent/20' : 'border-cyber-border'
+              }`}
+            >
+              <Link to={`/users/${agent.user_id}`} className="flex flex-col items-center gap-1.5 hover:opacity-80 transition-opacity">
+                <div className="relative">
+                  {user?.avatar_url ? (
+                    <img src={user.avatar_url} alt={nickname} className="w-10 h-10 rounded-full bg-cyber-surface ring-1 ring-cyber-border object-cover" />
+                  ) : (
+                    <span className="w-10 h-10 rounded-full bg-cyber-surface flex items-center justify-center text-sm text-cyber-text-dim ring-1 ring-cyber-border">{nickname[0]}</span>
+                  )}
+                  <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-cyber-card ${dotClass} ${isActive ? 'animate-pulse' : ''}`} />
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className={`text-[11px] font-mono ${colorClass}`}>{statusText}</span>
-                  <button onClick={() => toggleMutation.mutate({ profileId: agent.id, isActive: !agent.is_active })}
-                    className={`text-[11px] px-2 py-0.5 rounded border transition-all ${
-                      agent.is_active ? 'border-cyber-negative/30 text-cyber-negative hover:bg-cyber-negative/10' : 'border-cyber-positive/30 text-cyber-positive hover:bg-cyber-positive/10'
-                    }`}>
-                    {agent.is_active ? 'OFF' : 'ON'}
-                  </button>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+                <span className="text-xs text-cyber-text-muted text-center truncate w-full">{nickname}</span>
+              </Link>
+              <button
+                onClick={() => toggleMutation.mutate({ profileId: agent.id, isActive: !agent.is_active })}
+                className={`text-[10px] px-2 py-0.5 rounded border w-full transition-all ${
+                  agent.is_active
+                    ? 'border-cyber-negative/30 text-cyber-negative hover:bg-cyber-negative/10'
+                    : 'border-cyber-positive/30 text-cyber-positive hover:bg-cyber-positive/10'
+                }`}
+              >
+                {agent.is_active ? 'OFF' : 'ON'}
+              </button>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

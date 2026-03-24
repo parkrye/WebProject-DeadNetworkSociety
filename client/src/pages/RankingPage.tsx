@@ -6,7 +6,7 @@ export function RankingPage() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-cyber-text">인기도 랭킹</h2>
+      <h2 className="text-lg font-semibold text-cyber-text">유저 랭킹</h2>
 
       {isLoading && <p className="text-cyber-text-dim text-sm">로딩 중...</p>}
       {ranking?.length === 0 && !isLoading && (
