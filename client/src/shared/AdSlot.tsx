@@ -1,61 +1,52 @@
 /**
- * Ad slot component.
- * Currently shows placeholder. Replace inner content with AdSense <ins> tag when ready.
- *
- * Usage:
- *   <AdSlot type="feed" />      — native card style (in feed)
- *   <AdSlot type="banner" />    — horizontal banner (between content)
- *   <AdSlot type="sidebar" />   — small square (sidebar)
+ * Ad slot component — cyberpunk styled placeholder.
+ * Replace inner content with AdSense <ins> tag when ready.
  */
 
-// Set to true to show placeholder ads, false to hide completely
-const AD_ENABLED = false
+const AD_ENABLED = true
 
 interface AdSlotProps {
   type: 'feed' | 'banner' | 'sidebar'
 }
 
-const STYLES: Record<string, { container: string; inner: string; label: string }> = {
-  feed: {
-    container: 'bg-cyber-card/50 border border-cyber-border/30 rounded-lg p-4 my-3',
-    inner: 'h-24 md:h-28 rounded bg-cyber-surface/50 flex items-center justify-center',
-    label: 'AD',
-  },
-  banner: {
-    container: 'bg-cyber-card/50 border border-cyber-border/30 rounded-lg p-3 my-4',
-    inner: 'h-16 md:h-20 rounded bg-cyber-surface/50 flex items-center justify-center',
-    label: 'AD',
-  },
-  sidebar: {
-    container: 'bg-cyber-card/50 border border-cyber-border/30 rounded-lg p-3 mt-4',
-    inner: 'h-40 rounded bg-cyber-surface/50 flex items-center justify-center',
-    label: 'AD',
-  },
+const CONFIG: Record<string, { height: string; layout: 'horizontal' | 'vertical' }> = {
+  feed: { height: 'h-24 md:h-28', layout: 'horizontal' },
+  banner: { height: 'h-16 md:h-20', layout: 'horizontal' },
+  sidebar: { height: 'h-44', layout: 'vertical' },
 }
 
 export function AdSlot({ type }: AdSlotProps) {
   if (!AD_ENABLED) return null
 
-  const style = STYLES[type]
+  const { height, layout } = CONFIG[type]
 
   return (
-    <div className={style.container}>
-      {/*
-        TODO: Replace this placeholder with Google AdSense code:
-        <ins className="adsbygoogle"
-          style={{ display: 'block' }}
-          data-ad-client="ca-pub-XXXXXXX"
-          data-ad-slot="XXXXXXX"
-          data-ad-format="auto"
-          data-full-width-responsive="true" />
-      */}
-      <div className={style.inner}>
-        <div className="text-center">
-          <span className="text-[10px] text-cyber-text-dim/40 border border-cyber-text-dim/20 px-1.5 py-0.5 rounded">
-            {style.label}
-          </span>
-          <p className="text-[10px] text-cyber-text-dim/30 mt-1">광고 영역</p>
+    <div className="my-3 rounded-lg border border-dashed border-cyber-accent/20 bg-gradient-to-r from-cyber-card via-cyber-surface/50 to-cyber-card overflow-hidden">
+      <div className={`${height} flex items-center justify-center relative`}>
+        {/* Scanline effect */}
+        <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
+          style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(6,182,212,0.1) 2px, rgba(6,182,212,0.1) 4px)' }} />
+
+        {/* Content */}
+        <div className={`flex ${layout === 'horizontal' ? 'flex-row items-center gap-4' : 'flex-col items-center gap-2'} z-10`}>
+          <div className="flex items-center gap-2">
+            <span className="text-cyber-accent/30 text-lg">⬡</span>
+            <div>
+              <p className="text-[11px] text-cyber-accent/40 font-mono tracking-widest uppercase">Ad Space</p>
+              <p className="text-[10px] text-cyber-text-dim/50">광고 모집중</p>
+            </div>
+          </div>
+          <a
+            href="mailto:ad@deadnetwork.society"
+            className="text-[10px] text-cyber-accent/30 border border-cyber-accent/15 rounded px-2 py-0.5 hover:text-cyber-accent/60 hover:border-cyber-accent/30 transition-all"
+          >
+            문의하기 →
+          </a>
         </div>
+
+        {/* Corner accents */}
+        <span className="absolute top-1.5 left-2 text-[8px] text-cyber-accent/15 font-mono">DNS://AD</span>
+        <span className="absolute bottom-1.5 right-2 text-[8px] text-cyber-accent/15 font-mono">SLOT.{type.toUpperCase()}</span>
       </div>
     </div>
   )
