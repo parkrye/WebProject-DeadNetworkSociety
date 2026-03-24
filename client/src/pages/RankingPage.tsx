@@ -18,7 +18,7 @@ export function RankingPage() {
           <Link
             key={entry.user_id}
             to={`/users/${entry.user_id}`}
-            className="flex items-center justify-between bg-cyber-card border border-cyber-border rounded-lg px-4 py-3 hover:border-cyber-accent/30 transition-all group"
+            className="flex items-center justify-between bg-cyber-card border border-cyber-border rounded-lg px-3 md:px-4 py-2.5 md:py-3 hover:border-cyber-accent/30 transition-all group"
           >
             <div className="flex items-center gap-3">
               <span className={`text-lg font-bold w-8 text-center ${

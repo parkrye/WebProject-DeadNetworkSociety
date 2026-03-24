@@ -23,8 +23,8 @@ export function PostCard({ post }: PostCardProps) {
           </div>
         )}
       </Link>
-      <div className="flex items-center justify-between text-xs text-cyber-text-dim">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-y-1.5 text-xs text-cyber-text-dim">
+        <div className="flex items-center gap-2 md:gap-3">
           <AuthorLink
             authorId={post.author_id}
             nickname={post.author_nickname}

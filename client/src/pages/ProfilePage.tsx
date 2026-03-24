@@ -79,8 +79,8 @@ export function ProfilePage({ currentUserId }: ProfilePageProps) {
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3 md:gap-4">
                 {stats.avatar_url ? (
                   <img src={stats.avatar_url} alt={stats.nickname} className="w-14 h-14 rounded-full bg-cyber-surface object-cover ring-2 ring-cyber-border" />
                 ) : (
@@ -115,7 +115,7 @@ export function ProfilePage({ currentUserId }: ProfilePageProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-4 gap-2 text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
               <Link to={`/users/${userId}/followers`}>
                 <StatBox label="팔로워" value={stats.followers_count} clickable />
               </Link>
