@@ -1,5 +1,5 @@
 import { apiClient } from '../../shared/api-client'
-import type { Post, PostEnriched } from '../../shared/types'
+import type { Post, PostEnriched, TrendingKeyword } from '../../shared/types'
 
 export const postApi = {
   feed: (page = 1, size = 20) =>
@@ -7,6 +7,9 @@ export const postApi = {
 
   popular: () =>
     apiClient.get<PostEnriched[]>('/posts/popular'),
+
+  trendingKeywords: () =>
+    apiClient.get<TrendingKeyword[]>('/posts/trending-keywords'),
 
   list: (page = 1, size = 20) =>
     apiClient.get<Post[]>(`/posts?page=${page}&size=${size}`),

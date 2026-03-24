@@ -29,6 +29,15 @@ class PopularPost(Base, UUIDPrimaryKeyMixin):
     )
 
 
+class TrendingKeyword(Base, UUIDPrimaryKeyMixin):
+    """Queue of trending keywords, max 20. FIFO eviction by promoted_at."""
+    __tablename__ = "trending_keywords"
+
+    keyword: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    promoted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+
 class PostMetadata(Base, UUIDPrimaryKeyMixin):
     __tablename__ = "post_metadata"
 

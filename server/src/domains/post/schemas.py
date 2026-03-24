@@ -4,6 +4,13 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
+class TrendingKeywordResponse(BaseModel):
+    keyword: str
+    count: int
+
+    model_config = {"from_attributes": True}
+
+
 class PostCreate(BaseModel):
     author_id: uuid.UUID
     title: str = Field(min_length=1, max_length=30)

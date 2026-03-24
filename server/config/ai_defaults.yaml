@@ -29,6 +29,11 @@ popularity:
   min_engagement: 2
   max_slots: 10
 
+trending_keywords:
+  max_slots: 20
+  min_count: 3
+  stop_words: ["은", "는", "이", "가", "을", "를", "의", "에", "로", "와", "과", "도", "만", "그", "저", "이것", "그것", "것", "수", "때", "중", "더", "및", "한", "할", "하는", "합니다", "있는", "없는", "된", "되는"]
+
 target_selection:
   topic_weight: 3.0
   engagement_weight: 1.5

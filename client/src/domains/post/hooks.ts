@@ -21,6 +21,14 @@ export function usePopularFeed() {
   })
 }
 
+export function useTrendingKeywords() {
+  return useQuery({
+    queryKey: ['trending-keywords'],
+    queryFn: () => postApi.trendingKeywords(),
+    refetchInterval: 30000,
+  })
+}
+
 export function usePosts(page = 1) {
   return useQuery({
     queryKey: [...POSTS_KEY, page],

@@ -5,7 +5,13 @@ from sqlalchemy import case, cast, delete, Float, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domains.comment.models import Comment
-from src.domains.post.models import PopularPost, Post, PostMetadata
+import re
+import yaml
+from pathlib import Path
+
+from src.domains.post.models import PopularPost, Post, PostMetadata, TrendingKeyword
+
+_AI_DEFAULTS_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "ai_defaults.yaml"
 from src.domains.reaction.models import Reaction
 from src.shared.pagination import PaginatedResult, PaginationParams
 
@@ -222,5 +228,86 @@ class PopularPostRepository:
                 popularity_score=new_score,
                 promoted_at=now,
             ))
+
+        await self._session.flush()
+
+
+class TrendingKeywordRepository:
+    _KOREAN_WORD_RE = re.compile(r'[가-힣]{2,}')
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    @staticmethod
+    def _load_config() -> dict:
+        with open(_AI_DEFAULTS_PATH, encoding="utf-8") as f:
+            return yaml.safe_load(f).get("trending_keywords", {})
+
+    def _extract_keywords(self, text: str, stop_words: set[str]) -> list[str]:
+        words = self._KOREAN_WORD_RE.findall(text)
+        return [w for w in words if w not in stop_words and len(w) >= 2]
+
+    async def get_all(self) -> list[TrendingKeyword]:
+        stmt = select(TrendingKeyword).order_by(TrendingKeyword.count.desc())
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def refresh(self) -> None:
+        """Count keywords from all posts, update trending queue (FIFO, max 20)."""
+        config = self._load_config()
+        max_slots = config.get("max_slots", 20)
+        min_count = config.get("min_count", 3)
+        stop_words = set(config.get("stop_words", []))
+
+        # Count keywords from all posts
+        result = await self._session.execute(select(Post.title, Post.content))
+        word_counts: dict[str, int] = {}
+        for row in result.all():
+            text = f"{row.title} {row.content}"
+            for word in self._extract_keywords(text, stop_words):
+                word_counts[word] = word_counts.get(word, 0) + 1
+
+        # Filter by min_count, sort by count desc
+        qualified = {w: c for w, c in word_counts.items() if c >= min_count}
+        sorted_words = sorted(qualified.items(), key=lambda x: x[1], reverse=True)
+
+        # Current trending
+        current_result = await self._session.execute(
+            select(TrendingKeyword.keyword, TrendingKeyword.promoted_at)
+        )
+        current = {r.keyword: r.promoted_at for r in current_result.all()}
+
+        # Update counts for existing
+        for keyword, count in sorted_words:
+            if keyword in current:
+                await self._session.execute(
+                    update(TrendingKeyword)
+                    .where(TrendingKeyword.keyword == keyword)
+                    .values(count=count)
+                )
+
+        # Remove disqualified
+        disqualified = set(current.keys()) - set(qualified.keys())
+        if disqualified:
+            await self._session.execute(
+                delete(TrendingKeyword).where(TrendingKeyword.keyword.in_(disqualified))
+            )
+            for kw in disqualified:
+                del current[kw]
+
+        # Add best new keyword (1 per refresh, FIFO like popular posts)
+        now = datetime.now(UTC)
+        for keyword, count in sorted_words:
+            if keyword not in current:
+                if len(current) >= max_slots:
+                    oldest_kw = min(current, key=current.get)
+                    await self._session.execute(
+                        delete(TrendingKeyword).where(TrendingKeyword.keyword == oldest_kw)
+                    )
+                    del current[oldest_kw]
+
+                self._session.add(TrendingKeyword(keyword=keyword, count=count, promoted_at=now))
+                current[keyword] = now
+                break  # 1 per refresh
 
         await self._session.flush()

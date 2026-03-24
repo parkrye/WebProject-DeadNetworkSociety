@@ -131,14 +131,17 @@ async def execute_action_set(
                 action.action_type, action.persona.nickname,
             )
 
-    # Refresh popular posts queue after each action set
+    # Refresh popular posts + trending keywords after each action set
     try:
         async with session_factory() as session:
             popular_repo = PopularPostRepository(session)
             await popular_repo.refresh()
+            from src.domains.post.repository import TrendingKeywordRepository
+            keyword_repo = TrendingKeywordRepository(session)
+            await keyword_repo.refresh()
             await session.commit()
     except Exception:
-        logger.exception("Failed to refresh popular posts")
+        logger.exception("Failed to refresh popular posts/keywords")
 
 
 ACTION_TYPE_LABELS = {

@@ -71,6 +71,11 @@ export interface AgentProfile {
   updated_at: string
 }
 
+export interface TrendingKeyword {
+  keyword: string
+  count: number
+}
+
 export interface RankingEntry {
   rank: number
   user_id: string

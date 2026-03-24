@@ -8,8 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domains.comment.models import Comment
 from src.domains.post.models import PopularPost, Post
-from src.domains.post.repository import PopularPostRepository
-from src.domains.post.schemas import PostCreate, PostEnrichedResponse, PostResponse, PostUpdate
+from src.domains.post.models import TrendingKeyword
+from src.domains.post.repository import PopularPostRepository, TrendingKeywordRepository
+from src.domains.post.schemas import PostCreate, PostEnrichedResponse, PostResponse, PostUpdate, TrendingKeywordResponse
 from src.domains.post.service import PostService
 from src.domains.reaction.models import Reaction
 from src.domains.user.models import User
@@ -144,6 +145,15 @@ async def refresh_popular(
         max_slots=config.get("max_slots", 10),
     )
     await session.commit()
+
+
+@router.get("/trending-keywords", response_model=list[TrendingKeywordResponse])
+async def get_trending_keywords(
+    session: AsyncSession = Depends(get_session),
+) -> list[TrendingKeywordResponse]:
+    repo = TrendingKeywordRepository(session)
+    keywords = await repo.get_all()
+    return [TrendingKeywordResponse(keyword=k.keyword, count=k.count) for k in keywords]
 
 
 @router.get("/popular", response_model=list[PostEnrichedResponse])
