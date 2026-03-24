@@ -95,6 +95,8 @@ async def test_popular_feed_ordered_by_score(client: AsyncClient) -> None:
     await _react(client, u2, high_post, "like")
     await _comment(client, u3, high_post, "댓글 추가")
 
+    # Refresh twice: each refresh adds 1 new post to queue
+    await _refresh_popular(client)
     await _refresh_popular(client)
     resp = await client.get("/api/posts/popular")
 
@@ -120,7 +122,9 @@ async def test_popular_max_slots(client: AsyncClient) -> None:
         await _react(client, users[0], pid, "like")
         await _react(client, users[1], pid, "like")
 
-    await _refresh_popular(client)
+    # Refresh 12 times to add all candidates
+    for _ in range(12):
+        await _refresh_popular(client)
     resp = await client.get("/api/posts/popular")
 
     assert resp.status_code == 200

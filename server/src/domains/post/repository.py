@@ -120,7 +120,15 @@ class PopularPostRepository:
         min_engagement: int = 2,
         max_slots: int = 10,
     ) -> None:
-        """Recalculate top posts and sync the popular_posts table (queue, max_slots)."""
+        """Refresh popular posts queue.
+
+        Logic:
+        1. Score ALL qualifying posts
+        2. Update scores for posts already in the queue
+        3. Find new qualifying posts NOT yet in the queue
+        4. Add new posts, evicting oldest (FIFO by promoted_at) if over max_slots
+        5. Remove posts that no longer meet min_engagement
+        """
         like_sub = (
             select(Reaction.target_id, func.count().label("cnt"))
             .where(Reaction.target_type == "post", Reaction.reaction_type == "like")
@@ -154,68 +162,65 @@ class PopularPostRepository:
             + like_ratio * like_ratio_weight
         )
 
-        stmt = (
+        # All qualifying posts with scores
+        all_qualified = await self._session.execute(
             select(Post.id, score.label("score"))
             .outerjoin(like_sub, Post.id == like_sub.c.target_id)
             .outerjoin(dislike_sub, Post.id == dislike_sub.c.target_id)
             .outerjoin(comment_sub, Post.id == comment_sub.c.post_id)
             .where((comment_col + like_col) >= min_engagement)
             .order_by(score.desc())
-            .limit(max_slots)
         )
-        result = await self._session.execute(stmt)
-        top_rows = result.all()
-        new_ids = {row.id: row.score for row in top_rows}
+        qualified = {row.id: row.score for row in all_qualified.all()}
 
-        # Get current popular entries
+        # Current queue
         current_result = await self._session.execute(
             select(PopularPost.post_id, PopularPost.promoted_at)
             .order_by(PopularPost.promoted_at.asc())
         )
         current_entries = {r.post_id: r.promoted_at for r in current_result.all()}
 
-        # Update scores for existing entries
-        now = datetime.now(UTC)
-        for post_id, new_score in new_ids.items():
-            if post_id in current_entries:
+        # 1. Update scores for existing entries
+        for post_id in current_entries:
+            if post_id in qualified:
                 await self._session.execute(
                     update(PopularPost)
                     .where(PopularPost.post_id == post_id)
-                    .values(popularity_score=new_score)
+                    .values(popularity_score=qualified[post_id])
                 )
 
-        # Remove entries that no longer qualify
-        to_remove = set(current_entries.keys()) - set(new_ids.keys())
-        if to_remove:
+        # 2. Remove entries that no longer qualify
+        disqualified = set(current_entries.keys()) - set(qualified.keys())
+        if disqualified:
             await self._session.execute(
-                delete(PopularPost).where(PopularPost.post_id.in_(to_remove))
+                delete(PopularPost).where(PopularPost.post_id.in_(disqualified))
             )
+            for pid in disqualified:
+                del current_entries[pid]
 
-        # Add new entries
-        new_to_add = set(new_ids.keys()) - set(current_entries.keys())
-        for post_id in new_to_add:
+        # 3. Find the best new candidate not yet in queue
+        best_new = None
+        for pid, sc in sorted(qualified.items(), key=lambda x: x[1], reverse=True):
+            if pid not in current_entries:
+                best_new = (pid, sc)
+                break
+
+        # 4. Add the best new candidate if it exists
+        if best_new:
+            now = datetime.now(UTC)
+            post_id, new_score = best_new
+
+            if len(current_entries) >= max_slots:
+                # FIFO eviction: remove the oldest by promoted_at
+                oldest_pid = min(current_entries, key=current_entries.get)
+                await self._session.execute(
+                    delete(PopularPost).where(PopularPost.post_id == oldest_pid)
+                )
+
             self._session.add(PopularPost(
                 post_id=post_id,
-                popularity_score=new_ids[post_id],
+                popularity_score=new_score,
                 promoted_at=now,
             ))
-        await self._session.flush()
 
-        # FIFO eviction: if over max_slots, remove oldest by promoted_at
-        count_result = await self._session.execute(
-            select(func.count()).select_from(PopularPost)
-        )
-        total = count_result.scalar_one()
-        if total > max_slots:
-            overflow = total - max_slots
-            oldest = await self._session.execute(
-                select(PopularPost.id)
-                .order_by(PopularPost.promoted_at.asc())
-                .limit(overflow)
-            )
-            oldest_ids = [r[0] for r in oldest.all()]
-            if oldest_ids:
-                await self._session.execute(
-                    delete(PopularPost).where(PopularPost.id.in_(oldest_ids))
-                )
-            await self._session.flush()
+        await self._session.flush()
