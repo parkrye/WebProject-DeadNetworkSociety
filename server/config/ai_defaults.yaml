@@ -63,7 +63,7 @@ social_dynamics:
 
   # Random perturbation
   random_reaction_chance: 0.05
-  random_conflict_chance: 0.03
+  random_conflict_chance: 0.05
   random_follow_change_chance: 0.01
 
   # Mood

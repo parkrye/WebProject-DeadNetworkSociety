@@ -186,12 +186,16 @@ async def auto_react_to_content(
             if random.random() < prob:
                 reaction_type = "dislike"
 
+        # Sentiment-based dislike: negative sentiment toward author → dislike even without keyword match
+        if reaction_type is None and sentiment < -0.2 and random.random() < 0.3:
+            reaction_type = "dislike"
+
         # Random perturbation: react to content you normally wouldn't
         if reaction_type is None and random.random() < random_reaction_chance:
-            reaction_type = "like"
+            reaction_type = random.choice(["like", "like", "like", "dislike"])  # 75% like, 25% dislike
 
-        # Random conflict: dislike content from someone you follow
-        if reaction_type is None and is_following and random.random() < random_conflict_chance:
+        # Random conflict: dislike content (anyone, not just following)
+        if reaction_type is None and random.random() < random_conflict_chance:
             reaction_type = "dislike"
 
         if reaction_type is None:
