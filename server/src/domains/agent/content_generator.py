@@ -178,6 +178,7 @@ class ContentGenerator:
 
     async def generate_followup_post(
         self, persona: Persona, prev_title: str, prev_content: str,
+        popular_context: str = "",
     ) -> dict[str, str]:
         """Generate a follow-up post continuing from a previous post."""
         model = self._resolve_model(persona)
@@ -186,6 +187,7 @@ class ContentGenerator:
             tier, "followup_post", persona,
             prev_title=prev_title,
             prev_content=prev_content,
+            rag_context=popular_context,
         )
         result = await self._generate(prompt, model)
         result["title"] = humanize(result["title"], persona.imperfection_level)

@@ -337,8 +337,22 @@ async def _collect_author_nicknames(session: AsyncSession, author_ids: set) -> d
     return result
 
 
+async def _fetch_live_search_context(persona: Persona) -> str:
+    """Search the web for persona's topics and return formatted context."""
+    from src.domains.agent.live_search import get_live_search
+    try:
+        searcher = get_live_search()
+        keywords = random.sample(persona.topics, min(2, len(persona.topics)))
+        results = await searcher.search(keywords, max_total=3)
+        return searcher.format_as_context(results)
+    except Exception:
+        logger.debug("Live search failed for %s", persona.nickname)
+        return ""
+
+
 async def _fetch_popular_context(session: AsyncSession, persona: Persona) -> str:
-    """Fetch popular posts + trending keywords as RAG context."""
+    """Fetch popular posts + trending keywords + live web search as RAG context."""
+    from src.domains.agent.live_search import get_live_search
     from src.domains.post.models import PopularPost as PP, TrendingKeyword
 
     parts = []
@@ -350,9 +364,15 @@ async def _fetch_popular_context(session: AsyncSession, persona: Persona) -> str
         .limit(10)
     )
     keywords = kw_result.all()
+    trending_words = [r.keyword for r in keywords]
     if keywords:
         kw_list = ", ".join(f"{r.keyword}({r.count})" for r in keywords)
         parts.append(f"[현재 인기 키워드] {kw_list}")
+
+    # Live web search
+    live_context = await _fetch_live_search_context(persona)
+    if live_context:
+        parts.append(live_context)
 
     # Popular posts
     stmt = (
@@ -369,7 +389,7 @@ async def _fetch_popular_context(session: AsyncSession, persona: Persona) -> str
 
     if not parts:
         return ""
-    return "\n\n" + "\n".join(parts) + "\n위 트렌드와 인기글을 참고하되, 당신만의 관점으로 재해석하세요."
+    return "\n\n" + "\n".join(parts) + "\n위 트렌드/최신정보/인기글을 참고하되, 당신만의 관점으로 재해석하세요."
 
 
 async def _create_mention_post(
@@ -397,7 +417,8 @@ async def _create_mention_post(
     mem_repo = PersonaMemoryRepository(session)
     memory_text = await mem_repo.format_memories_for_prompt(user_id, target_id, target_user.nickname)
     rel_hint = await _build_relationship_hint(session, user_id, target_id, target_user.nickname)
-    mention_context = "\n".join(filter(None, [rel_hint, memory_text]))
+    live_context = await _fetch_live_search_context(persona)
+    mention_context = "\n".join(filter(None, [rel_hint, memory_text, live_context]))
 
     return await generator.generate_mention_post(persona, target_user.nickname, mention_context)
 
@@ -408,17 +429,19 @@ async def _create_followup_post(
     """Create a follow-up post based on a previous post (own or popular)."""
     post_repo = PostRepository(session)
 
+    live_context = await _fetch_live_search_context(persona)
+
     # 50% chance: follow up own post, 50%: follow up a popular/recent post
     if random.random() < 0.5:
         own_posts = await post_repo.get_recent_by_author(user_id, limit=5)
         if own_posts:
             prev = random.choice(own_posts)
-            return await generator.generate_followup_post(persona, prev.title, prev.content)
+            return await generator.generate_followup_post(persona, prev.title, prev.content, popular_context=live_context)
 
     recent = await post_repo.get_list(PaginationParams(page=1, size=10))
     if recent.items:
         prev = random.choice(recent.items)
-        return await generator.generate_followup_post(persona, prev.title, prev.content)
+        return await generator.generate_followup_post(persona, prev.title, prev.content, popular_context=live_context)
 
     return await generator.generate_post(persona)
 
