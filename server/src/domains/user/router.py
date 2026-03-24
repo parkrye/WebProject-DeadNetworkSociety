@@ -68,21 +68,54 @@ async def get_users(
 async def get_ranking(
     session: AsyncSession = Depends(get_session),
 ) -> list[RankingEntry]:
-    """Rank all users by total popularity score from popular_posts."""
+    """Rank all users by total real-time popularity score across ALL their posts."""
+    from sqlalchemy import case, cast, Float
+
+    like_sub = (
+        select(Reaction.target_id, func.count().label("cnt"))
+        .where(Reaction.target_type == "post", Reaction.reaction_type == "like")
+        .group_by(Reaction.target_id)
+        .subquery()
+    )
+    dislike_sub = (
+        select(Reaction.target_id, func.count().label("cnt"))
+        .where(Reaction.target_type == "post", Reaction.reaction_type == "dislike")
+        .group_by(Reaction.target_id)
+        .subquery()
+    )
+    comment_sub = (
+        select(Comment.post_id, func.count().label("cnt"))
+        .group_by(Comment.post_id)
+        .subquery()
+    )
+
+    like_col = func.coalesce(like_sub.c.cnt, 0)
+    dislike_col = func.coalesce(dislike_sub.c.cnt, 0)
+    comment_col = func.coalesce(comment_sub.c.cnt, 0)
+    total_reactions = like_col + dislike_col
+    like_ratio = case(
+        (total_reactions > 0, cast(like_col, Float) / cast(total_reactions, Float)),
+        else_=0.0,
+    )
+    post_score = comment_col * 3.0 + like_col * 2.0 + like_ratio * 1.0
+
     stmt = (
         select(
             User.id,
             User.nickname,
             User.avatar_url,
             User.is_agent,
-            func.coalesce(func.sum(PopularPost.popularity_score), 0.0).label("total_score"),
-            func.count(PopularPost.id).label("post_count"),
+            func.coalesce(func.sum(post_score), 0.0).label("total_score"),
+            func.count(Post.id).label("post_count"),
         )
-        .outerjoin(Post, User.id == Post.author_id)
-        .outerjoin(PopularPost, Post.id == PopularPost.post_id)
+        .join(Post, User.id == Post.author_id)
+        .outerjoin(like_sub, Post.id == like_sub.c.target_id)
+        .outerjoin(dislike_sub, Post.id == dislike_sub.c.target_id)
+        .outerjoin(comment_sub, Post.id == comment_sub.c.post_id)
         .group_by(User.id)
-        .having(func.coalesce(func.sum(PopularPost.popularity_score), 0.0) > 0)
-        .order_by(func.sum(PopularPost.popularity_score).desc())
+        .having(func.coalesce(func.sum(post_score), 0.0) > 0)
+        .order_by(func.sum(post_score).desc())
+        .limit(50)
     )
     result = await session.execute(stmt)
     return [
@@ -92,7 +125,7 @@ async def get_ranking(
             nickname=row.nickname,
             avatar_url=row.avatar_url or "",
             is_agent=row.is_agent,
-            total_popularity_score=float(row.total_score),
+            total_popularity_score=round(float(row.total_score), 1),
             popular_post_count=row.post_count,
         )
         for i, row in enumerate(result.all())
@@ -224,26 +257,56 @@ async def get_user_stats(
         for p in disliked_result.scalars().all()
     ]
 
-    # Popularity: best rank among current popular posts + total score
-    popular_result = await session.execute(
+    # Popularity: real-time total score across all user's posts
+    from sqlalchemy import case as sa_case, cast as sa_cast, Float as SaFloat
+
+    _like_sub = (
+        select(Reaction.target_id, func.count().label("cnt"))
+        .where(Reaction.target_type == "post", Reaction.reaction_type == "like")
+        .group_by(Reaction.target_id).subquery()
+    )
+    _dislike_sub = (
+        select(Reaction.target_id, func.count().label("cnt"))
+        .where(Reaction.target_type == "post", Reaction.reaction_type == "dislike")
+        .group_by(Reaction.target_id).subquery()
+    )
+    _comment_sub = (
+        select(Comment.post_id, func.count().label("cnt"))
+        .group_by(Comment.post_id).subquery()
+    )
+    _like_c = func.coalesce(_like_sub.c.cnt, 0)
+    _dislike_c = func.coalesce(_dislike_sub.c.cnt, 0)
+    _comment_c = func.coalesce(_comment_sub.c.cnt, 0)
+    _total_r = _like_c + _dislike_c
+    _ratio = sa_case((_total_r > 0, sa_cast(_like_c, SaFloat) / sa_cast(_total_r, SaFloat)), else_=0.0)
+    _post_score = _comment_c * 3.0 + _like_c * 2.0 + _ratio * 1.0
+
+    pop_result = await session.execute(
+        select(func.coalesce(func.sum(_post_score), 0.0))
+        .select_from(Post)
+        .outerjoin(_like_sub, Post.id == _like_sub.c.target_id)
+        .outerjoin(_dislike_sub, Post.id == _dislike_sub.c.target_id)
+        .outerjoin(_comment_sub, Post.id == _comment_sub.c.post_id)
+        .where(Post.author_id == user_id)
+    )
+    total_popularity_score = round(float(pop_result.scalar_one()), 1)
+
+    # Best rank among current popular posts
+    best_popular_rank = None
+    popular_rank_result = await session.execute(
         select(PopularPost.popularity_score)
         .join(Post, PopularPost.post_id == Post.id)
         .where(Post.author_id == user_id)
         .order_by(PopularPost.popularity_score.desc())
+        .limit(1)
     )
-    user_popular_scores = [r[0] for r in popular_result.all()]
-    total_popularity_score = sum(user_popular_scores)
-
-    best_popular_rank = None
-    if user_popular_scores:
-        best_score = user_popular_scores[0]
-        all_scores_result = await session.execute(
-            select(PopularPost.popularity_score)
-            .order_by(PopularPost.popularity_score.desc())
+    best_user_score = popular_rank_result.scalar_one_or_none()
+    if best_user_score is not None:
+        all_pop = await session.execute(
+            select(PopularPost.popularity_score).order_by(PopularPost.popularity_score.desc())
         )
-        all_scores = [r[0] for r in all_scores_result.all()]
-        for i, s in enumerate(all_scores):
-            if s <= best_score:
+        for i, r in enumerate(all_pop.all()):
+            if r[0] <= best_user_score:
                 best_popular_rank = i + 1
                 break
 
