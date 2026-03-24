@@ -8,6 +8,9 @@
  *   <AdSlot type="sidebar" />   — small square (sidebar)
  */
 
+// Set to true to show placeholder ads, false to hide completely
+const AD_ENABLED = false
+
 interface AdSlotProps {
   type: 'feed' | 'banner' | 'sidebar'
 }
@@ -31,6 +34,8 @@ const STYLES: Record<string, { container: string; inner: string; label: string }
 }
 
 export function AdSlot({ type }: AdSlotProps) {
+  if (!AD_ENABLED) return null
+
   const style = STYLES[type]
 
   return (
