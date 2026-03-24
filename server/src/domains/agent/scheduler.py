@@ -338,27 +338,38 @@ async def _collect_author_nicknames(session: AsyncSession, author_ids: set) -> d
 
 
 async def _fetch_popular_context(session: AsyncSession, persona: Persona) -> str:
-    """Fetch popular posts from the popular_posts queue as RAG context."""
-    from sqlalchemy import select as sa_select
-    from src.domains.post.models import PopularPost as PP
+    """Fetch popular posts + trending keywords as RAG context."""
+    from src.domains.post.models import PopularPost as PP, TrendingKeyword
 
+    parts = []
+
+    # Trending keywords
+    kw_result = await session.execute(
+        select(TrendingKeyword.keyword, TrendingKeyword.count)
+        .order_by(TrendingKeyword.count.desc())
+        .limit(10)
+    )
+    keywords = kw_result.all()
+    if keywords:
+        kw_list = ", ".join(f"{r.keyword}({r.count})" for r in keywords)
+        parts.append(f"[현재 인기 키워드] {kw_list}")
+
+    # Popular posts
     stmt = (
-        sa_select(Post.title, Post.content)
+        select(Post.title, Post.content)
         .join(PP, Post.id == PP.post_id)
         .order_by(PP.popularity_score.desc())
         .limit(3)
     )
     result = await session.execute(stmt)
     rows = result.all()
-    if not rows:
-        return ""
+    if rows:
+        blocks = [f"- {r.title}: {r.content}" for r in rows]
+        parts.append("[커뮤니티 인기글]\n" + "\n".join(blocks))
 
-    blocks = [f"- {r.title}: {r.content}" for r in rows]
-    return (
-        "\n\n[참고: 커뮤니티 인기글]\n"
-        + "\n".join(blocks)
-        + "\n위 인기글을 참고하되, 당신만의 관점으로 재해석하세요."
-    )
+    if not parts:
+        return ""
+    return "\n\n" + "\n".join(parts) + "\n위 트렌드와 인기글을 참고하되, 당신만의 관점으로 재해석하세요."
 
 
 async def _create_mention_post(
