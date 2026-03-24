@@ -21,6 +21,14 @@ export function usePopularFeed() {
   })
 }
 
+export function useSearchPosts(query: string, page = 1) {
+  return useQuery({
+    queryKey: ['search', query, page],
+    queryFn: () => postApi.search(query, page),
+    enabled: query.length > 0,
+  })
+}
+
 export function useTrendingKeywords() {
   return useQuery({
     queryKey: ['trending-keywords'],

@@ -8,6 +8,9 @@ export const postApi = {
   popular: () =>
     apiClient.get<PostEnriched[]>('/posts/popular'),
 
+  search: (q: string, page = 1) =>
+    apiClient.get<PostEnriched[]>(`/posts/search?q=${encodeURIComponent(q)}&page=${page}`),
+
   trendingKeywords: () =>
     apiClient.get<TrendingKeyword[]>('/posts/trending-keywords'),
 

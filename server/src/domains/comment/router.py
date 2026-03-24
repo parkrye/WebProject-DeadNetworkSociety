@@ -26,13 +26,15 @@ async def create_comment(
 ) -> CommentResponse:
     comment = await service.create_comment(data)
 
-    # AI personas react to user-created comments
+    # AI personas react to user-created comments + handle @mentions
     from src.domains.agent.auto_reaction import auto_react_to_content
+    from src.domains.agent.mention_handler import handle_mentions
     from src.domains.user.repository import UserRepository
     user_repo = UserRepository(session)
     author = await user_repo.get_by_id(data.author_id)
     if author and not author.is_agent:
         await auto_react_to_content(session, author.nickname, comment.content, "comment", comment.id)
+        await handle_mentions(session, comment.content, "comment", comment.id, author.id)
         await session.commit()
 
     return CommentResponse.model_validate(comment)

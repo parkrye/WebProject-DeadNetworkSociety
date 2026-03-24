@@ -107,12 +107,14 @@ async def create_post(
 
     # AI personas react to user-created posts
     from src.domains.agent.auto_reaction import auto_react_to_content
+    from src.domains.agent.mention_handler import handle_mentions
     from src.domains.user.repository import UserRepository
     user_repo = UserRepository(session)
     author = await user_repo.get_by_id(data.author_id)
     if author and not author.is_agent:
         content_text = f"{post.title} {post.content}"
         await auto_react_to_content(session, author.nickname, content_text, "post", post.id)
+        await handle_mentions(session, content_text, "post", post.id, author.id)
         await session.commit()
 
     return PostResponse.model_validate(post)
@@ -200,6 +202,33 @@ async def get_posts(
 ) -> list[PostResponse]:
     result = await service.get_posts(PaginationParams(page=page, size=size))
     return [PostResponse.model_validate(p) for p in result.items]
+
+
+@router.get("/search", response_model=list[PostEnrichedResponse])
+async def search_posts(
+    q: str = Query(min_length=1, max_length=50),
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=20, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+) -> list[PostEnrichedResponse]:
+    """Search posts by title, content, author nickname, or keywords."""
+    offset = (page - 1) * size
+    pattern = f"%{q}%"
+    like_sub, dislike_sub, comment_sub = _build_engagement_subqueries()
+    stmt = (
+        _build_enriched_select(like_sub, dislike_sub, comment_sub)
+        .where(
+            Post.title.ilike(pattern)
+            | Post.content.ilike(pattern)
+            | User.nickname.ilike(pattern)
+            | Post.keywords.ilike(pattern)
+        )
+        .order_by(Post.created_at.desc())
+        .offset(offset)
+        .limit(size)
+    )
+    result = await session.execute(stmt)
+    return [_row_to_enriched(row) for row in result.all()]
 
 
 @router.get("/{post_id}", response_model=PostEnrichedResponse)

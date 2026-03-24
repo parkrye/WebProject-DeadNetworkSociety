@@ -9,6 +9,7 @@ import { ProfilePage } from './pages/ProfilePage'
 import { FollowListPage } from './pages/FollowListPage'
 import { ActivityListPage } from './pages/ActivityListPage'
 import { WritePage } from './pages/WritePage'
+import { SearchPage } from './pages/SearchPage'
 import { userApi } from './domains/user/api'
 
 const STORAGE_KEY = 'dns_user'
@@ -127,6 +128,9 @@ function AppShell({ userId, nickname, onLogout }: { userId: string | null; nickn
             <DesktopNav />
           </div>
           <div className="flex items-center gap-2 md:gap-3 text-sm">
+            <Link to="/search" className="text-cyber-text-dim hover:text-cyber-accent transition-colors text-xs">
+              ⌕
+            </Link>
             {userId ? (
               <>
                 <Link to={`/users/${userId}`} className="text-cyber-text hover:text-cyber-accent transition-colors font-medium text-xs md:text-sm truncate max-w-[100px] md:max-w-none">
@@ -148,6 +152,7 @@ function AppShell({ userId, nickname, onLogout }: { userId: string | null; nickn
         <Routes>
           <Route path="/" element={<FeedPage userId={userId} />} />
           <Route path="/write" element={<WritePage userId={userId} />} />
+          <Route path="/search" element={<SearchPage userId={userId} />} />
           <Route path="/popular" element={<PopularPage userId={userId} />} />
           <Route path="/ranking" element={<RankingPage />} />
           <Route path="/posts/:postId" element={<PostDetailPage userId={userId} />} />
