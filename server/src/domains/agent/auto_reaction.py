@@ -127,6 +127,7 @@ async def auto_react_to_content(
     content_text: str,
     target_type: str,
     target_id: 'uuid.UUID',
+    target_keywords: list[str] | None = None,
 ) -> None:
     """Stochastic auto-reaction: personas react based on preferences, follow status, and sentiment."""
     import uuid
@@ -210,6 +211,15 @@ async def auto_react_to_content(
         )
         if target_type == "post":
             await post_repo.increment_view_count(target_id)
+
+        # Strengthen knowledge graph based on reaction
+        if target_keywords and len(target_keywords) >= 2:
+            from src.domains.agent.knowledge_graph import (
+                KnowledgeGraphRepository, WEIGHT_REACTION_LIKE, WEIGHT_REACTION_DISLIKE,
+            )
+            kg = KnowledgeGraphRepository(session)
+            kg_delta = WEIGHT_REACTION_LIKE if reaction_type == "like" else WEIGHT_REACTION_DISLIKE
+            await kg.strengthen_edges(user.id, target_keywords, weight_delta=kg_delta)
 
         # Record interaction in persistent relationship DB
         if author_user_id:

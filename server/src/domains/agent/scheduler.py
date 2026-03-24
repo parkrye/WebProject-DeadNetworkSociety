@@ -350,8 +350,11 @@ async def _fetch_live_search_context(persona: Persona) -> str:
         return ""
 
 
-async def _fetch_popular_context(session: AsyncSession, persona: Persona) -> tuple[str, list[str]]:
-    """Fetch popular posts + trending keywords + live search. Returns (context, keywords)."""
+async def _fetch_popular_context(
+    session: AsyncSession, persona: Persona, user_id: 'uuid.UUID | None' = None,
+) -> tuple[str, list[str]]:
+    """Fetch popular posts + trending keywords + live search + knowledge graph. Returns (context, keywords)."""
+    from src.domains.agent.knowledge_graph import KnowledgeGraphRepository
     from src.domains.agent.live_search import get_live_search
     from src.domains.post.models import PopularPost as PP, TrendingKeyword
     import re
@@ -361,6 +364,13 @@ async def _fetch_popular_context(session: AsyncSession, persona: Persona) -> tup
 
     # Persona topics as base keywords
     collected_keywords.extend(persona.topics[:2])
+
+    # Knowledge graph: inject persona's known connections
+    if user_id:
+        kg = KnowledgeGraphRepository(session)
+        kg_context = await kg.format_for_prompt(user_id, persona.topics[:3])
+        if kg_context:
+            parts.append(kg_context)
 
     # Trending keywords
     kw_result = await session.execute(
@@ -515,7 +525,7 @@ async def _do_create_post(
         result = await _create_followup_post(session, user_id, persona, generator)
         context_keywords = list(persona.topics[:2])
     else:
-        popular_context, context_keywords = await _fetch_popular_context(session, persona)
+        popular_context, context_keywords = await _fetch_popular_context(session, persona, user_id)
         result = await generator.generate_post(persona, popular_context=popular_context)
 
     keywords_json = _json.dumps(context_keywords, ensure_ascii=False)
@@ -540,9 +550,14 @@ async def _do_create_post(
 
     await event_bus.publish(PostCreated(post_id=post.id, author_id=post.author_id))
 
+    # Strengthen knowledge graph with post keywords
+    from src.domains.agent.knowledge_graph import KnowledgeGraphRepository, WEIGHT_POST_AUTHOR
+    kg = KnowledgeGraphRepository(session)
+    await kg.strengthen_edges(user_id, context_keywords, weight_delta=WEIGHT_POST_AUTHOR)
+
     # Auto-react: other personas like/dislike based on preferences
     content_text = f"{post.title} {result.get('content', '')}"
-    await auto_react_to_content(session, persona.nickname, content_text, "post", post.id)
+    await auto_react_to_content(session, persona.nickname, content_text, "post", post.id, target_keywords=context_keywords)
 
     logger.info("[%s] Created post: %s", persona.nickname, post.title[:50])
 
@@ -595,6 +610,11 @@ async def _do_comment(
     )
     await session.flush()
     await event_bus.publish(CommentCreated(comment_id=comment.id, post_id=post.id, author_id=user_id))
+
+    # Strengthen knowledge graph with comment keywords
+    from src.domains.agent.knowledge_graph import KnowledgeGraphRepository, WEIGHT_COMMENT
+    kg = KnowledgeGraphRepository(session)
+    await kg.strengthen_edges(user_id, comment_kws, weight_delta=WEIGHT_COMMENT)
 
     # Track affinity in DB + evaluate follow
     _rel_repo = PersonaRelationshipRepository(session)
