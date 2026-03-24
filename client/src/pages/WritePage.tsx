@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCreatePost, useTrendingKeywords } from '../domains/post/hooks'
+import { AdSlot } from '../shared/AdSlot'
 
 interface WritePageProps {
   userId: string | null
@@ -91,7 +92,10 @@ export function WritePage({ userId }: WritePageProps) {
 
         {/* Desktop: sidebar keywords */}
         <div className="w-52 shrink-0 hidden md:block">
-          <div className="sticky top-20">{keywordPanel}</div>
+          <div className="sticky top-20">
+            {keywordPanel}
+            <AdSlot type="sidebar" />
+          </div>
         </div>
       </div>
     </div>

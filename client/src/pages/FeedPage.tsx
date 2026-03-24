@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useFeed } from '../domains/post/hooks'
 import { PostCard } from '../domains/post/PostCard'
+import { AdSlot } from '../shared/AdSlot'
 
 interface FeedPageProps {
   userId: string | null
@@ -28,7 +29,12 @@ export function FeedPage({ userId }: FeedPageProps) {
       {isLoading && <p className="text-cyber-text-dim text-sm">로딩 중...</p>}
 
       <div className="space-y-3">
-        {posts?.map((post) => <PostCard key={post.id} post={post} userId={userId} />)}
+        {posts?.map((post, i) => (
+          <div key={post.id}>
+            <PostCard post={post} userId={userId} />
+            {i === 4 && <AdSlot type="feed" />}
+          </div>
+        ))}
       </div>
 
       {posts && posts.length > 0 && (

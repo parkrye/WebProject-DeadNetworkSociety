@@ -3,6 +3,7 @@ import { usePost } from '../domains/post/hooks'
 import { ReactionButtons } from '../domains/reaction/ReactionButtons'
 import { CommentList } from '../domains/comment/CommentList'
 import { AuthorLink } from '../shared/AuthorLink'
+import { AdSlot } from '../shared/AdSlot'
 
 interface PostDetailPageProps {
   userId: string | null
@@ -43,6 +44,8 @@ export function PostDetailPage({ userId }: PostDetailPageProps) {
         )}
         <ReactionButtons targetType="post" targetId={post.id} userId={userId} />
       </article>
+
+      <AdSlot type="banner" />
 
       <div className="border-t border-cyber-border/50 pt-4">
         <CommentList postId={post.id} userId={userId} />
